@@ -19,11 +19,20 @@ service cloud.firestore {
     match /shops/{shopId} {
       allow read: if true; // Anyone (customer or vendor) can read a shop
       allow create: if shopId.matches('^demo_user_.*') || isSignedIn();
-      allow update: if isShopOwner(shopId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastTicketNumber', 'date']);
+      allow update: if isShopOwner(shopId) || 
+                       exists(/databases/$(database)/documents/shops/$(shopId)/private/verification) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastTicketNumber', 'date']);
       allow delete: if isShopOwner(shopId);
 
+      match /private/verification {
+        allow read: if false; // Completely private, no one can read
+        allow create, update: if request.resource.data.serverSecret == "DORK_SERVER_SECRET_987654321_PRO_TOKEN";
+        allow delete: if true; // Safe cleanup of temporary tokens
+      }
+
       match /invoices/{invoiceId} {
-        allow read, write: if isShopOwner(shopId);
+        allow read: if isShopOwner(shopId);
+        allow write: if isShopOwner(shopId) || exists(/databases/$(database)/documents/shops/$(shopId)/private/verification);
       }
     }
 

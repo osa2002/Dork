@@ -9,44 +9,30 @@ import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 
-import { initializeApp as initializeClientApp, getApps as getClientApps } from "firebase/app";
+import { getDatabaseProvider } from "./src/lib/DatabaseProvider";
+import { validateRequest } from "./src/middlewares/validationMiddleware";
+import { globalErrorHandler } from "./src/middlewares/errorMiddleware";
 import {
-  getFirestore as getClientFirestore,
-  doc as clientDoc,
-  getDoc as clientGetDoc,
-  collection as clientCollection,
-  query as clientQuery,
-  where as clientWhere,
-  getDocs as clientGetDocs,
-  setDoc as clientSetDoc,
-  deleteDoc as clientDeleteDoc,
-  runTransaction as clientRunTransaction,
-  writeBatch as clientWriteBatch,
-} from "firebase/firestore";
+  AppError,
+  ValidationError,
+  UnauthorizedError,
+  ForbiddenError,
+  NotFoundError,
+  ConflictError,
+  RateLimitError
+} from "./src/errors/CustomErrors";
+import {
+  sendEmailSchema,
+  sendFcmSchema,
+  estimateWaitTimeSchema,
+  analyzeQueueSchema,
+  createTicketSchema,
+  createCheckoutSessionSchema,
+  verifySessionSchema
+} from "./src/schemas/apiSchemas";
 
 let firebaseAdminApp: any = null;
 let firestoreDatabaseId: string | undefined = undefined;
-let clientDb: any = null;
-
-function getClientDb() {
-  if (clientDb) return clientDb;
-  try {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-      const apps = getClientApps();
-      const clientApp = apps.length > 0 ? apps[0] : initializeClientApp(config);
-      clientDb = getClientFirestore(clientApp, config.firestoreDatabaseId);
-      console.log("[Firebase Client SDK] Successfully initialized Firestore Client SDK on server");
-      return clientDb;
-    } else {
-      throw new Error("firebase-applet-config.json not found");
-    }
-  } catch (err: any) {
-    console.error("[Firebase Client SDK] Failed to initialize Firestore client:", err.message);
-    throw err;
-  }
-}
 
 function initializeFirebaseAdmin() {
   if (firebaseAdminApp) return;
@@ -141,12 +127,8 @@ async function startServer() {
   app.use(express.json());
 
   // API Route to send email
-  app.post("/api/send-email", async (req, res) => {
+  app.post("/api/send-email", validateRequest(sendEmailSchema), async (req, res, next) => {
     const { email, name, ticketNumber, serviceName, shopName, lang } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
-    }
 
     const isAr = lang === "ar";
 
@@ -253,8 +235,7 @@ async function startServer() {
         previewUrl: previewUrl || null,
       });
     } catch (err: any) {
-      console.error("Error sending email:", err);
-      return res.status(500).json({ error: "Failed to send email: " + err.message });
+      next(err);
     }
   });
 
@@ -434,96 +415,50 @@ async function startServer() {
   });
 
   // Secure ticket creation & plan validation endpoint
-  app.post("/api/tickets/create", async (req, res) => {
+  app.post("/api/tickets/create", validateRequest(createTicketSchema), async (req, res, next) => {
     const { shopId, serviceId, serviceName, customerName, customerPhone, customerEmail, emailNotify, smsNotify, whatsappNotify, lang } = req.body;
 
-    if (!shopId || !serviceId || !customerName) {
-      return res.status(400).json({ error: "Required fields (shopId, serviceId, customerName) are missing." });
-    }
-
     try {
-      const dbClient = getClientDb();
+      const dbProvider = await getDatabaseProvider();
 
       // Get shop details
-      const shopDocRef = clientDoc(dbClient, "shops", shopId);
-      const shopDoc = await clientGetDoc(shopDocRef);
-      if (!shopDoc.exists()) {
-        return res.status(404).json({ error: "Shop not found." });
+      const shopData = await dbProvider.getShop(shopId);
+      if (!shopData) {
+        throw new NotFoundError("Shop not found.");
       }
 
-      const shopData = shopDoc.data();
       const planType = shopData?.plan_type || shopData?.plan || "free";
       const storeTimezone = shopData?.timezone || "Asia/Riyadh";
 
       const startOfToday = getStartOfTodayInTimezone(storeTimezone);
 
       // Query existing tickets for today to find the actual current max ticket number in Firestore
-      let maxTicketNumInDb = 0;
-      try {
-        const ticketsQuery = clientQuery(
-          clientCollection(dbClient, "tickets"),
-          clientWhere("shopId", "==", shopId)
-        );
-        const ticketsSnap = await clientGetDocs(ticketsQuery);
-        ticketsSnap.forEach((docSnap) => {
-          const t = docSnap.data();
-          if (t && t.createdAt >= startOfToday) {
-            const num = Number(t.ticketNumber) || 0;
-            if (num > maxTicketNumInDb) {
-              maxTicketNumInDb = num;
-            }
-          }
-        });
-      } catch (err) {
-        console.warn("[Server Ticket Create] Failed to query existing tickets for max ticketNumber fallback:", err);
-      }
+      const maxTicketNumInDb = await dbProvider.getTodayTicketsMaxNumber(shopId, startOfToday);
 
       const dayKey = startOfToday.slice(0, 10); // YYYY-MM-DD
 
       let nextTicketNumber = 1;
 
       try {
-        await clientRunTransaction(dbClient, async (transaction: any) => {
-          const shopSnap = await transaction.get(shopDocRef);
-          if (!shopSnap.exists()) {
-            throw new Error("Shop not found in transaction");
-          }
-          const shopData = shopSnap.data();
-          const storedDate = shopData.date || "";
-          
-          let currentCount = 0;
-          if (storedDate === dayKey) {
-            currentCount = shopData.lastTicketNumber || 0;
-          }
-
-          const baseCount = Math.max(currentCount, maxTicketNumInDb);
-
-          const isDemoShop = shopId.startsWith("demo_user_");
-          if (planType === "free" && baseCount >= 5 && !isDemoShop) {
-            throw new Error("FREE_PLAN_LIMIT_REACHED");
-          }
-
-          nextTicketNumber = baseCount + 1;
-
-          transaction.set(
-            shopDocRef,
-            { lastTicketNumber: nextTicketNumber, date: dayKey },
-            { merge: true }
-          );
-        });
+        const isDemoShop = shopId.startsWith("demo_user_");
+        nextTicketNumber = await dbProvider.incrementTicketNumberTransaction(
+          shopId,
+          dayKey,
+          maxTicketNumInDb,
+          planType,
+          isDemoShop
+        );
       } catch (txErr: any) {
         if (txErr?.message === "FREE_PLAN_LIMIT_REACHED") {
-          return res.status(403).json({
-            error: "لقد وصلت الباقة لهذا المحل إلى الحد الأقصى اليوم (5 عملاء)."
-          });
+          throw new ForbiddenError("لقد وصلت الباقة لهذا المحل إلى الحد الأقصى اليوم (5 عملاء).");
         }
         throw txErr;
       }
 
       // Save ticket to Firestore
-      const newTicketRef = clientDoc(clientCollection(dbClient, "tickets"));
+      const randomId = "t_" + Math.random().toString(36).substring(2, 15);
       const cleanTicket = {
-        id: newTicketRef.id,
+        id: randomId,
         shopId,
         serviceId,
         serviceName,
@@ -541,7 +476,7 @@ async function startServer() {
         createdAt: new Date().toISOString()
       };
 
-      await clientSetDoc(newTicketRef, cleanTicket);
+      await dbProvider.saveTicket(randomId, cleanTicket);
 
       // Trigger server-side welcome notifications
       const origin = req.headers.origin || "http://localhost:3000";
@@ -552,18 +487,13 @@ async function startServer() {
         ticket: cleanTicket
       });
     } catch (err: any) {
-      console.error("Error creating ticket via server API:", err);
-      return res.status(500).json({ error: err.message || "Failed to create ticket on server." });
+      next(err);
     }
   });
 
   // Send FCM instant notification when 1 person is left
-  app.post("/api/send-fcm-alert", async (req, res) => {
+  app.post("/api/send-fcm-alert", validateRequest(sendFcmSchema), async (req, res, next) => {
     const { fcmToken, shopName, ticketNumber, lang } = req.body;
-
-    if (!fcmToken) {
-      return res.status(400).json({ error: "FCM registration token is required" });
-    }
 
     const isAr = lang === "ar";
     const title = isAr
@@ -604,7 +534,7 @@ async function startServer() {
   });
 
   // AI Estimated Wait Time Endpoint
-  app.post("/api/estimate-wait-time", async (req, res) => {
+  app.post("/api/estimate-wait-time", validateRequest(estimateWaitTimeSchema), async (req, res, next) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const { shopName, serviceName, peopleInFront, recentTickets, activeCountersCount, avgDuration, lang } = req.body;
     const isAr = lang === "ar";
@@ -680,7 +610,7 @@ Do NOT write any preambles, markdown formatting, or system debug output. Return 
   });
 
   // AI Queue Density Analysis Endpoint using Gemini
-  app.post("/api/analyze-queue", async (req, res) => {
+  app.post("/api/analyze-queue", validateRequest(analyzeQueueSchema), async (req, res, next) => {
     const apiKey = process.env.GEMINI_API_KEY;
     const { shopData, stats, lang } = req.body;
     const isAr = lang === "ar";
@@ -823,56 +753,19 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
       const startOfTodayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
       console.log(`[Cleanup Job] Querying tickets created before: ${startOfTodayUTC}`);
 
-      let archivedCount = 0;
-      let deletedCount = 0;
+      const dbProvider = await getDatabaseProvider();
+      const tickets = await dbProvider.getTicketsCreatedBefore(startOfTodayUTC);
 
-      // Use Client SDK for cleanup to avoid Admin SDK permission issues
-      const dbClient = getClientDb();
-      const ticketsCol = clientCollection(dbClient, "tickets");
-      const q = clientQuery(ticketsCol, clientWhere("createdAt", "<", startOfTodayUTC));
-      const snapshot = await clientGetDocs(q);
+      console.log(`[Cleanup Job] Found ${tickets.length} tickets from previous days to archive/delete.`);
 
-      console.log(`[Cleanup Job] Found ${snapshot.size} tickets from previous days to archive/delete.`);
-
-      let batch = clientWriteBatch(dbClient);
-      let operationsInBatch = 0;
-
-      for (const ticketDoc of snapshot.docs) {
-        const ticketData = ticketDoc.data();
-        const ticketId = ticketDoc.id;
-
-        // Archive ref
-        const archiveRef = clientDoc(dbClient, "archived_tickets", ticketId);
-        batch.set(archiveRef, {
-          ...ticketData,
-          archivedAt: new Date().toISOString()
-        });
-
-        // Delete ref
-        batch.delete(ticketDoc.ref);
-
-        operationsInBatch += 2;
-        archivedCount++;
-        deletedCount++;
-
-        // Firestore batch has a limit of 500 operations
-        if (operationsInBatch >= 400) {
-          await batch.commit();
-          console.log(`[Cleanup Job] Committed batch of ${operationsInBatch} operations.`);
-          batch = clientWriteBatch(dbClient);
-          operationsInBatch = 0;
-        }
+      if (tickets.length > 0) {
+        await dbProvider.archiveAndDeleteTickets(tickets);
       }
 
-      if (operationsInBatch > 0) {
-        await batch.commit();
-        console.log(`[Cleanup Job] Committed final batch of ${operationsInBatch} operations.`);
-      }
-
-      console.log(`[Cleanup Job] Finished! Successfully archived ${archivedCount} and deleted ${deletedCount} tickets.`);
-      return { success: true, archived: archivedCount, deleted: deletedCount };
+      console.log(`[Cleanup Job] Finished! Successfully archived and deleted ${tickets.length} tickets.`);
+      return { success: true, archived: tickets.length, deleted: tickets.length };
     } catch (err: any) {
-      console.error("[Cleanup Job] Error during database cleanup:", err);
+      console.error("[Cleanup Job] Error during database database cleanup:", err);
       return { success: false, error: err.message };
     }
   }
@@ -894,11 +787,8 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
   }
 
   // Route to create a Stripe checkout session for a shop upgrade
-  app.post("/api/stripe/create-checkout-session", async (req, res) => {
+  app.post("/api/stripe/create-checkout-session", validateRequest(createCheckoutSessionSchema), async (req, res, next) => {
     const { shopId, lang } = req.body;
-    if (!shopId) {
-      return res.status(400).json({ error: "shopId is required." });
-    }
 
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const isAr = lang === "ar";
@@ -943,18 +833,13 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
 
       return res.status(200).json({ success: true, url: session.url });
     } catch (err: any) {
-      console.warn("Stripe create checkout session warning:", err.message);
-      return res.status(500).json({ error: err.message });
+      next(err);
     }
   });
 
   // Route to verify completed checkout session and apply PRO upgrade
-  app.get("/api/stripe/verify-session", async (req, res) => {
+  app.get("/api/stripe/verify-session", validateRequest(verifySessionSchema), async (req, res, next) => {
     const { sessionId, shopId } = req.query;
-
-    if (!sessionId || !shopId) {
-      return res.status(400).json({ error: "Missing sessionId or shopId." });
-    }
 
     const stripeKey = process.env.STRIPE_SECRET_KEY;
 
@@ -962,13 +847,11 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
     if (!stripeKey) {
       if (typeof sessionId === "string" && sessionId.startsWith("cs_mock_")) {
         try {
-          const dbClient = getClientDb();
+          const dbProvider = await getDatabaseProvider();
           const invoiceId = "inv_stripe_mock_" + sessionId.substring(8, 20);
           const invoiceNum = "INV-STRIPE-MOCK-" + Math.floor(10000 + Math.random() * 90000);
           
-          // Save Invoice into Firestore
-          const invoiceDocRef = clientDoc(dbClient, "shops", shopId as string, "invoices", invoiceId);
-          await clientSetDoc(invoiceDocRef, {
+          const invoiceData = {
             id: invoiceId,
             shopId: shopId,
             invoiceNumber: invoiceNum,
@@ -978,14 +861,12 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
             cardBrand: "Visa (Mock Sandbox)",
             cardLast4: "4242",
             createdAt: new Date().toISOString()
-          });
+          };
 
-          // Update Shop's active Plan to "pro"
-          const shopDocRef = clientDoc(dbClient, "shops", shopId as string);
-          await clientSetDoc(shopDocRef, {
-            plan: "pro",
-            planExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          }, { merge: true });
+          const planExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+          // Upgrade using Provider Abstraction
+          await dbProvider.upgradeShopToProWithInvoice(shopId as string, invoiceId, invoiceData, planExpiresAt);
 
           console.log(`[Stripe Mock Sandbox] Upgraded Shop ${shopId} to PRO. Invoice ${invoiceNum} generated successfully.`);
 
@@ -996,14 +877,10 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
             message: "Shop upgraded to PRO (Mock Sandbox) successfully!"
           });
         } catch (dbErr: any) {
-          console.warn("Error updating database during mock verification:", dbErr.message);
-          return res.status(500).json({ error: "Failed to update subscription in database." });
+          next(dbErr);
         }
       } else {
-        return res.status(400).json({ 
-          error: "stripe_not_configured",
-          message: "Stripe secret key is missing. Please set STRIPE_SECRET_KEY in settings." 
-        });
+        throw new ValidationError("Stripe secret key is missing. Please set STRIPE_SECRET_KEY in settings.");
       }
     }
 
@@ -1012,11 +889,11 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
       const session = await stripe.checkout.sessions.retrieve(sessionId as string);
 
       if (session.payment_status === "paid" || session.status === "complete") {
-        const dbClient = getClientDb();
+        const dbProvider = await getDatabaseProvider();
         
         // Ensure this transaction belongs to this shop
         if (session.metadata?.shopId !== shopId) {
-          return res.status(400).json({ error: "Session metadata shopId mismatch." });
+          throw new ValidationError("Session metadata shopId mismatch.");
         }
 
         // Generate an official Invoice ID & Number
@@ -1042,9 +919,7 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
           }
         }
 
-        // Save Invoice into Firestore
-        const invoiceDocRef = clientDoc(dbClient, "shops", shopId as string, "invoices", invoiceId);
-        await clientSetDoc(invoiceDocRef, {
+        const invoiceData = {
           id: invoiceId,
           shopId: shopId,
           invoiceNumber: invoiceNum,
@@ -1054,14 +929,12 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
           cardBrand: cardBrand,
           cardLast4: cardLast4,
           createdAt: new Date().toISOString()
-        });
+        };
 
-        // Update Shop's active Plan to "pro"
-        const shopDocRef = clientDoc(dbClient, "shops", shopId as string);
-        await clientSetDoc(shopDocRef, {
-          plan: "pro",
-          planExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        }, { merge: true });
+        const planExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Upgrade using Provider Abstraction
+        await dbProvider.upgradeShopToProWithInvoice(shopId as string, invoiceId, invoiceData, planExpiresAt);
 
         console.log(`[Stripe Upgrade] Shop ${shopId} successfully upgraded to PRO. Invoice ${invoiceNum} generated.`);
 
@@ -1072,22 +945,25 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
           message: "Shop upgraded to PRO successfully!"
         });
       } else {
-        return res.status(400).json({ error: "Session has not been paid yet." });
+        throw new ValidationError("Session has not been paid yet.");
       }
     } catch (err: any) {
-      console.warn("Stripe verify session warning:", err.message);
-      return res.status(500).json({ error: err.message });
+      next(err);
     }
   });
 
   // Manual/Triggered Cleanup Endpoint
-  app.post("/api/cron/cleanup", async (req, res) => {
+  app.post("/api/cron/cleanup", async (req, res, next) => {
     console.log("[API Route] Manual cleanup trigger received.");
-    const result = await runCleanupJob();
-    if (result.success) {
-      return res.status(200).json(result);
-    } else {
-      return res.status(500).json(result);
+    try {
+      const result = await runCleanupJob();
+      if (result.success) {
+        return res.status(200).json(result);
+      } else {
+        throw new AppError(500, "Cleanup Failed", result.error || "Database cleanup failed.");
+      }
+    } catch (err: any) {
+      next(err);
     }
   });
 
@@ -1121,6 +997,9 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Global Error Handler for RFC 7807 problem details
+  app.use(globalErrorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Server] running on http://localhost:${PORT}`);

@@ -8,26 +8,14 @@ import CustomerPortal from "./components/CustomerPortal";
 import PublicDisplay from "./components/PublicDisplay";
 import { Loader2, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useUiStore } from "./store";
 
 const VendorDashboard = lazy(() => import("./components/VendorDashboard"));
 const StripeMockCheckout = lazy(() => import("./components/StripeMockCheckout"));
 
 export default function App() {
   const { t } = useTranslation();
-
-  // Global Dark Mode State
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem("dork_global_dark_mode") === "true";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("dork_global_dark_mode", String(isDarkMode));
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
+  const { isDarkMode, setIsDarkMode } = useUiStore();
 
   // Navigation State
   const [currentSlug, setCurrentSlug] = useState<string | null>(null);
