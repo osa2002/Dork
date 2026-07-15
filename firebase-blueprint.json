@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "Shop": {
+      "title": "Shop",
+      "description": "Represents a store or shop offering services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique shop identifier" },
+        "ownerId": { "type": "string", "description": "Owner user ID" },
+        "name": { "type": "string", "description": "The friendly name of the shop" },
+        "slug": { "type": "string", "description": "Unique URL-friendly slug for the shop" },
+        "category": { "type": "string", "description": "Shop category e.g. حلاق, عيادة" },
+        "logoUrl": { "type": "string", "description": "Optional URL for the shop logo" },
+        "ticketColor": { "type": "string", "description": "Optional customized color for the digital ticket" },
+        "workingHours": { "type": "object", "description": "Store working hours and days of operations" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "ownerId", "name", "slug", "category", "createdAt"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Represents a service offered by a shop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique service identifier" },
+        "shopId": { "type": "string", "description": "The associated shop's identifier" },
+        "name": { "type": "string", "description": "Service name" },
+        "avgDurationMinutes": { "type": "integer", "description": "Average duration in minutes" },
+        "isActive": { "type": "boolean", "description": "Is the service active and joinable" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "shopId", "name", "avgDurationMinutes", "isActive", "createdAt"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Represents a customer's spot/ticket in the shop's queue",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ticket identifier" },
+        "shopId": { "type": "string", "description": "Shop ID for the queue" },
+        "serviceId": { "type": "string", "description": "Service ID" },
+        "serviceName": { "type": "string", "description": "Name of the service" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "customerPhone": { "type": "string", "description": "Optional customer phone number" },
+        "customerEmail": { "type": "string", "description": "Optional customer email address for turn approaching notifications" },
+        "emailNotify": { "type": "boolean", "description": "Whether customer opted in for email alerts when turn is approaching" },
+        "emailNotified": { "type": "boolean", "description": "Whether the approaching turn email notification has been sent" },
+        "ticketNumber": { "type": "integer", "description": "Unique daily queue sequence number" },
+        "status": { "type": "string", "enum": ["waiting", "calling", "completed", "cancelled", "no_show"], "description": "Current status of the ticket" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "calledAt": { "type": "string", "format": "date-time", "description": "Timestamp when called" },
+        "completedAt": { "type": "string", "format": "date-time", "description": "Timestamp when completed/cancelled" },
+        "rating": { "type": "integer", "description": "Customer rating from 1 to 5" },
+        "ratingComment": { "type": "string", "description": "Customer rating written feedback/comment" },
+        "ratedAt": { "type": "string", "format": "date-time", "description": "Timestamp when customer rated the service" },
+        "fcmToken": { "type": "string", "description": "FCM registration token for instant alert when 1 person is left" }
+      },
+      "required": ["id", "shopId", "serviceId", "serviceName", "customerName", "ticketNumber", "status", "createdAt"]
+    },
+    "Display": {
+      "title": "Display",
+      "description": "Represents an active display screen showing the queue inside the shop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique display screen identifier" },
+        "shopId": { "type": "string", "description": "The associated shop's identifier" },
+        "name": { "type": "string", "description": "Friendly name of the display screen" },
+        "lastActive": { "type": "string", "format": "date-time", "description": "Last active timestamp" },
+        "refreshRequestedAt": { "type": "string", "format": "date-time", "description": "Timestamp when a remote refresh was requested" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "shopId", "name", "lastActive", "createdAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Represents a payment invoice for shop plan upgrades",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique invoice identifier" },
+        "shopId": { "type": "string", "description": "The associated shop's identifier" },
+        "invoiceNumber": { "type": "string", "description": "Formatted invoice number" },
+        "amount": { "type": "string", "description": "Charged price amount" },
+        "planName": { "type": "string", "description": "The name of the paid plan e.g. PRO" },
+        "status": { "type": "string", "description": "Payment status e.g. paid" },
+        "cardBrand": { "type": "string", "description": "Visa, Mastercard, etc." },
+        "cardLast4": { "type": "string", "description": "Last 4 digits of card" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Invoice creation time" }
+      },
+      "required": ["id", "shopId", "invoiceNumber", "amount", "planName", "status", "createdAt"]
+    },
+    "BookingError": {
+      "title": "BookingError",
+      "description": "Represents an error log recorded during customer queue booking attempts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log identifier" },
+        "shopId": { "type": "string", "description": "Shop ID where the booking failed" },
+        "shopName": { "type": "string", "description": "Name of the shop" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "customerPhone": { "type": "string", "description": "Customer phone" },
+        "customerEmail": { "type": "string", "description": "Customer email" },
+        "serviceName": { "type": "string", "description": "Service name" },
+        "error": { "type": "string", "description": "The exact error message" },
+        "statusCode": { "type": "integer", "description": "HTTP status code (e.g. 403, 500) if applicable" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Timestamp of the failure" },
+        "offline": { "type": "boolean", "description": "Whether the client was offline" }
+      },
+      "required": ["id", "shopId", "shopName", "customerName", "error", "timestamp", "offline"]
+    },
+    "TicketCounter": {
+      "title": "TicketCounter",
+      "description": "Tracks atomic ticket daily counts for rate limits and ticket numbers",
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer", "description": "Current number of tickets created today" },
+        "shopId": { "type": "string", "description": "The shop identifier" },
+        "date": { "type": "string", "description": "Date string in YYYY-MM-DD format" }
+      },
+      "required": ["count", "shopId", "date"]
+    }
+  },
+  "firestore": {
+    "/shops/{shopId}": {
+      "schema": "Shop",
+      "description": "Information about a shop"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Services offered by a shop"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Customer tickets/spots in the queue"
+    },
+    "/displays/{displayId}": {
+      "schema": "Display",
+      "description": "Active public display devices"
+    },
+    "/archived_tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Archived tickets/spots from previous days"
+    },
+    "/shops/{shopId}/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Billing invoices history for the shop"
+    },
+    "/booking_errors/{errorId}": {
+      "schema": "BookingError",
+      "description": "Logs of failed customer queue booking attempts"
+    },
+    "/ticket_counters/{counterId}": {
+      "schema": "TicketCounter",
+      "description": "Atomic daily ticket counters per shop"
+    }
+  }
+}

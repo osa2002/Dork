@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc; /* slate-50 */
+}
+
+/* Dark Mode styling */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #020617 !important; /* slate-950 */
+}
+
+.dark .bg-white {
+  background-color: #0f172a !important; /* slate-900 */
+}
+
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-slate-100,
+.dark .border-slate-100\/50 {
+  border-color: #1e293b !important; /* slate-800 */
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: #f8fafc !important; /* slate-50 */
+}
+
+.dark .text-slate-750,
+.dark .text-slate-700 {
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.dark .text-slate-600 {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.dark .text-slate-500 {
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.dark .text-slate-400 {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.dark .bg-slate-50 {
+  background-color: #020617 !important; /* slate-950 */
+}
+
+.dark .bg-slate-100 {
+  background-color: #1e293b !important; /* slate-800 */
+}
+
+.dark .bg-slate-200 {
+  background-color: #334155 !important; /* slate-700 */
+}
+
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/80 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+.dark .hover\:bg-slate-50:hover {
+  background-color: #1e293b !important; /* slate-800 */
+}
+
+.dark .hover\:bg-slate-100:hover {
+  background-color: #334155 !important; /* slate-700 */
+}
+
+.dark .hover\:text-slate-950:hover {
+  color: #ffffff !important;
+}
+
+.dark .ticket-notch {
+  background-image: radial-gradient(circle at left, transparent 12px, #0f172a 13px),
+                    radial-gradient(circle at right, transparent 12px, #0f172a 13px) !important;
+}
+
+.dark input, 
+.dark select, 
+.dark textarea {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark input:focus, 
+.dark select:focus, 
+.dark textarea:focus {
+  background-color: #020617 !important;
+}
+
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 10px 10px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+.dark .border-indigo-50 {
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+.dark .border-rose-50 {
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+
+.dark .border-emerald-50 {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .bg-indigo-50\/50 {
+  background-color: rgba(99, 102, 241, 0.08) !important;
+}
+
+.dark .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+.dark .text-indigo-900 {
+  color: #e0e7ff !important;
+}
+
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+.dark .bg-emerald-50\/50 {
+  background-color: rgba(16, 185, 129, 0.05) !important;
+}
+
+.dark .border-emerald-100 {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark .text-emerald-800 {
+  color: #34d399 !important;
+}
+
+.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+.dark .border-rose-100 {
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+
+.dark .text-rose-800 {
+  color: #f43f5e !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
+.dark .text-amber-600 {
+  color: #fbbf24 !important;
+}
+
+/* Custom transitions and styles */
+.ticket-clip-path {
+  clip-path: polygon(0% 0%, 100% 0%, 100% 70%, 95% 73%, 100% 76%, 100% 100%, 0% 100%, 0% 76%, 5% 73%, 0% 70%);
+}
+
+.ticket-notch {
+  background-image: radial-gradient(circle at left, transparent 12px, white 13px),
+                    radial-gradient(circle at right, transparent 12px, white 13px);
+}

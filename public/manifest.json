@@ -1,0 +1,87 @@
+{
+  "id": "/?source=pwa",
+  "name": "دورك - نظام طوابير رقمي ذكي",
+  "short_name": "دورك",
+  "description": "نظام ذكي متكامل لحجز وإدارة تذاكر طوابير الانتظار والمناداة اللحظية وتتبع الدور لحظة بلحظة.",
+  "categories": ["business", "utilities", "productivity"],
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "لوحة تحكم البائع - نظام دورك لإدارة طوابير الانتظار"
+    },
+    {
+      "src": "/screenshot-mobile.jpg",
+      "sizes": "720x1280",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "تذكرة العميل الرقمية والمناداة الفورية"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "لوحة تحكم البائع",
+      "short_name": "لوحة التحكم",
+      "description": "إدارة وحجز والمناداة على العملاء في الطابور",
+      "url": "/?source=shortcut_dashboard",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "حجز تذكرة عميل",
+      "short_name": "تذكرة جديدة",
+      "description": "حجز تذكرة طابور جديدة لعميل في المحل",
+      "url": "/?source=shortcut_ticket",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

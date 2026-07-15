@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isShopOwner(shopId) {
+      return shopId.matches('^demo_user_.*') || (request.auth != null && request.auth.uid == shopId);
+    }
+
+    // 2. Shops Collection
+    match /shops/{shopId} {
+      allow read: if true; // Anyone (customer or vendor) can read a shop
+      allow create: if shopId.matches('^demo_user_.*') || isSignedIn();
+      allow update: if isShopOwner(shopId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastTicketNumber', 'date']);
+      allow delete: if isShopOwner(shopId);
+
+      match /invoices/{invoiceId} {
+        allow read, write: if isShopOwner(shopId);
+      }
+    }
+
+    // 3. Services Collection
+    match /services/{serviceId} {
+      allow read: if true; // Anyone can read services
+      allow create: if request.resource.data.shopId.matches('^demo_user_.*') || isSignedIn();
+      allow update, delete: if isShopOwner(resource.data.shopId);
+    }
+
+    // 4. Tickets Collection
+    match /tickets/{ticketId} {
+      allow read: if true; // Anyone can read/subscribe to tickets for a shop
+      allow create: if true; // Customers and demo vendors can create tickets
+      allow update: if true; // Customers can cancel their tickets, vendors can change status
+      allow delete: if isShopOwner(resource.data.shopId) || resource.data.createdAt != null;
+    }
+
+    // 5. Displays Collection
+    match /displays/{displayId} {
+      allow read: if true; // Public screens can read, shop owners can read all displays
+      allow create, update: if true; // Public screens can register/update status, shop owners can trigger refreshes or rename
+      allow delete: if isShopOwner(resource.data.shopId);
+    }
+
+    // 6. Archived Tickets Collection
+    match /archived_tickets/{ticketId} {
+      allow read, write: if true; // Allows backup archiving by server fallback
+    }
+
+    // 7. Booking Errors Collection
+    match /booking_errors/{errorId} {
+      allow create: if true; // Anyone (customer sessions) can record booking errors
+      allow read, delete: if isShopOwner(resource.data.shopId); // Only the shop owner can read/manage logs
+    }
+
+    // 8. Ticket Counters Collection
+    match /ticket_counters/{counterId} {
+      allow read, write: if true; // Anyone can read or update daily limit counters when booking
+    }
+
+    // 9. Counter Statuses Collection
+    match /counter_statuses/{statusId} {
+      allow read: if true; // Anyone can view window statuses
+      allow write: if true; // Vendors can update statuses
+    }
+  }
+}
