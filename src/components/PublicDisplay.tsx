@@ -47,8 +47,8 @@ interface CounterStatus {
 
 export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setIsDarkMode }: PublicDisplayProps) {
   const { t, i18n } = useTranslation();
-  const isRtl = i18n.language === "ar";
-  const currentLang = i18n.language || "ar";
+  const isRtl = (i18n.language || "ar").startsWith("ar");
+  const currentLang = (i18n.language || "ar").split("-")[0];
 
   const t_display = (key: string, fallback: string): string => {
     const dicts: Record<string, Record<string, string>> = {
@@ -810,7 +810,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
 
                 {/* Float popover menu */}
                 {showAudioSettings && (
-                  <div className={`absolute top-full mt-3 ${isRtl ? "left-0" : "right-0"} w-72 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl z-50 text-xs text-slate-300 space-y-4`}>
+                  <div className="absolute top-full mt-3 end-0 w-72 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl z-50 text-xs text-slate-300 space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                       <span className="font-black text-white flex items-center gap-1.5">
                         <Settings className="w-3.5 h-3.5 text-indigo-400" />
@@ -1081,7 +1081,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
                 </span>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto pr-1 min-h-0">
+              <div className="flex-1 space-y-4 overflow-y-auto pe-1 min-h-0">
                 {upcomingTickets.length > 0 ? (
                   <AnimatePresence initial={false} mode="popLayout">
                     {upcomingTickets.map((t, idx) => (
@@ -1327,7 +1327,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
                 </span>
               </div>
 
-              <div className="flex-1 space-y-3.5 overflow-y-auto pr-1 min-h-0">
+              <div className="flex-1 space-y-3.5 overflow-y-auto pe-1 min-h-0">
                 {upcomingTickets.length > 0 ? (
                   <AnimatePresence initial={false} mode="popLayout">
                     {upcomingTickets.map((t, idx) => (

@@ -271,7 +271,7 @@ export function CustomerTicketBoard({
 
                 {myTicket.rating || ratingSuccess ? (
                   /* Submitted Feedback / Read-only state */
-                  <div className="space-y-4 pt-1 text-left">
+                  <div className="space-y-4 pt-1 text-start">
                     <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-100/50 dark:border-emerald-900/30 text-center">
                       <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-black block">
                         {t("cust_rating_success_msg")}
@@ -532,7 +532,7 @@ export function CustomerTicketBoard({
                 >
                   {/* Glow effect on progress tip */}
                   <span 
-                    className="absolute -right-2 -top-1 w-4.5 h-4.5 rounded-full bg-white dark:bg-slate-950 border-2 border-indigo-500 flex items-center justify-center shadow-md animate-pulse"
+                    className="absolute -end-2 -top-1 w-4.5 h-4.5 rounded-full bg-white dark:bg-slate-950 border-2 border-indigo-500 flex items-center justify-center shadow-md animate-pulse"
                     style={{ borderColor: shop.ticketColor || undefined }}
                   >
                     <span 
@@ -842,7 +842,7 @@ export function CustomerTicketBoard({
                 <VolumeX className="w-5 h-5 text-slate-400 dark:text-slate-500" />
               )}
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-xs font-black text-slate-900 dark:text-white">
                 {t("customer_sound_alerts")}
               </h4>
@@ -888,7 +888,7 @@ export function CustomerTicketBoard({
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
               <Bell className="w-5 h-5" />
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-xs font-black text-slate-900">
                 {t("customer_push_notify_btn")}
               </h4>
@@ -911,7 +911,7 @@ export function CustomerTicketBoard({
             <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <Bell className="w-4.5 h-4.5" />
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-[11px] font-black text-emerald-950">
                 {t("customer_push_notify_enabled")}
               </h4>
@@ -942,7 +942,7 @@ export function CustomerTicketBoard({
             <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/40 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
               <Wrench className="w-5 h-5 animate-pulse" />
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
                 {t("diag_tool_title", "Notification Diagnostic Tool")}
               </h4>
@@ -966,7 +966,7 @@ export function CustomerTicketBoard({
             {pushPermission === "denied" && (
               <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 p-3 rounded-2xl flex gap-2.5 items-start">
                 <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <div className={`text-[10px] font-bold text-rose-800 dark:text-rose-300 leading-relaxed ${isRtl ? "text-right" : "text-left"}`}>
+                <div className="text-[10px] font-bold text-rose-800 dark:text-rose-300 leading-relaxed text-start">
                   <strong>{t("diag_blocked_warning", "Warning: Notifications Blocked!")}</strong>
                   <p className="mt-0.5 font-medium">
                     {t("diag_blocked_desc", "You have blocked notifications. Please click the lock icon 🔒 next to the address bar to reset the permissions.")}
@@ -976,9 +976,9 @@ export function CustomerTicketBoard({
             )}
 
             {!isStandalone && /iPhone|iPad|iPod/i.test(navigator.userAgent) && (
-              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-150 dark:border-amber-900/40 p-3 rounded-2xl flex gap-2.5 items-start">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-155 dark:border-amber-900/40 p-3 rounded-2xl flex gap-2.5 items-start">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <div className={`text-[10px] font-bold text-amber-800 dark:text-amber-300 leading-relaxed ${isRtl ? "text-right" : "text-left"}`}>
+                <div className="text-[10px] font-bold text-amber-800 dark:text-amber-300 leading-relaxed text-start">
                   <strong>{t("diag_ios_warning", "Crucial for iOS (iPhone):")}</strong>
                   <p className="mt-0.5 font-medium">
                     {t("diag_ios_desc", "Apple iOS restricts notifications to Home Screen apps. Tap the Share button 📤, then select 'Add to Home Screen' 📲, and launch it from there.")}
@@ -989,7 +989,7 @@ export function CustomerTicketBoard({
 
             {/* Checklist of diagnostics */}
             <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/60 p-3.5 rounded-2xl space-y-2.5">
-              <div className={`text-[10px] font-black text-slate-400 uppercase tracking-wider ${isRtl ? "text-right" : "text-left"}`}>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-start">
                 {t("diag_results_title", "Diagnostic Check Results")}
               </div>
 
@@ -1056,7 +1056,7 @@ export function CustomerTicketBoard({
 
             {/* Brand specific guides */}
             <div className="space-y-2">
-              <div className={`text-[10px] font-black text-slate-400 uppercase tracking-wider ${isRtl ? "text-right" : "text-left"}`}>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-start">
                 {t("diag_guides_title", "Brand Troubleshooting & Configuration Guides")}
               </div>
 
@@ -1169,7 +1169,7 @@ export function CustomerTicketBoard({
             <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 brand-bg-light brand-text-primary">
               <Smartphone className="w-5 h-5" />
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-xs font-black text-slate-900">
                 {t("customer_pwa_install_ticket_title")}
               </h4>
@@ -1191,13 +1191,13 @@ export function CustomerTicketBoard({
           ) : (
             /* Manual Instruction Fallback (iOS / Apple Safari or fallback browsers) */
             <div className="bg-slate-50/70 rounded-2xl p-3.5 border border-slate-100 text-slate-700 space-y-2">
-              <div className={`text-[10px] font-black text-indigo-600 uppercase tracking-wider brand-text-primary ${isRtl ? "text-right" : "text-left"}`}>
+              <div className="text-[10px] font-black text-indigo-600 uppercase tracking-wider brand-text-primary text-start">
                 {t("customer_pwa_install_ticket_guide")}
               </div>
               
               {/* iOS Apple instruction */}
               {/iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent) ? (
-                <p className={`text-[10.5px] leading-relaxed font-semibold ${isRtl ? "text-right" : "text-left"}`}>
+                <p className="text-[10.5px] leading-relaxed font-semibold text-start">
                   {isRtl ? (
                     <>
                       اضغط على زر المشاركة <span className="inline-block bg-white border border-slate-200 px-1.5 py-0.5 rounded text-xs font-mono">⎋</span> أسفل المتصفح، ثم اختر <span className="text-indigo-600 font-bold brand-text-primary">"إضافة إلى الشاشة الرئيسية"</span> <span className="inline-block bg-white border border-slate-200 px-1.5 py-0.5 rounded text-xs font-mono">⊕</span> من القائمة.
@@ -1210,7 +1210,7 @@ export function CustomerTicketBoard({
                 </p>
               ) : (
                 /* General fallback */
-                <p className={`text-[10.5px] leading-relaxed font-semibold ${isRtl ? "text-right" : "text-left"}`}>
+                <p className="text-[10.5px] leading-relaxed font-semibold text-start">
                   {isRtl ? (
                     <>
                       اضغط على زر القائمة النقاط الثلاث <span className="font-bold">⋮</span> في زاوية المتصفح، ثم اختر <span className="text-indigo-600 font-bold">"تثبيت التطبيق"</span> أو <span className="text-indigo-600 font-bold">"إضافة إلى الشاشة الرئيسية"</span>.

@@ -254,7 +254,7 @@ export function QueueTab({
                 <p className="text-[10px] text-slate-400 mt-1">{t("vend_click_next_guidance", "Click 'Call Next' to invoke the first client in queue.")}</p>
               </div>
             )}
-            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-50/20 dark:bg-indigo-900/5 rounded-full blur-xl pointer-events-none" />
+            <div className="absolute top-0 end-0 w-20 h-20 bg-indigo-50/20 dark:bg-indigo-900/5 rounded-full blur-xl pointer-events-none" />
           </div>
 
           {/* Action triggers: complete, cancel, next */}
@@ -326,7 +326,7 @@ export function QueueTab({
             </span>
           </div>
 
-          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[360px] overflow-y-auto pe-1">
             {filteredWaitingTickets.length > 0 ? (
               filteredWaitingTickets.map((tItem) => (
                 <div 
@@ -400,7 +400,7 @@ export function QueueTab({
             </span>
           </div>
 
-          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[360px] overflow-y-auto pe-1">
             {filteredPastTickets.length > 0 ? (
               filteredPastTickets.map((tItem) => {
                 let badgeBg = "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30";

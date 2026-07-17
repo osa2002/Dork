@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { Shop, Service } from "../types";
-import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { shopRepository } from "../repositories/shopRepository";
+import { handleFirestoreError, OperationType } from "../lib/firebase";
 import { cacheData, getCachedData } from "../lib/offlineDb";
 
 export interface ShopState {
@@ -91,61 +91,52 @@ export const useShopStore = create<ShopState>((set, get) => ({
       }
     });
 
-    const shopsRef = collection(db, "shops");
-    const q = query(shopsRef, where("slug", "==", shopSlug));
-
-    shopUnsubscribe = onSnapshot(q, (querySnapshot) => {
-      if (!active) return;
-
-      if (querySnapshot.empty) {
-        set({ shop: null, loadingShop: false });
-        return;
-      }
-
-      const shopDoc = querySnapshot.docs[0];
-      const shopData = { id: shopDoc.id, ...shopDoc.data() } as Shop;
-      set({ shop: shopData, loadingShop: false });
-      cacheData(`shop_${shopSlug}`, shopData); // Cache in IndexedDB
-
-      // Fetch services for this shop once
-      const servicesQuery = query(
-        collection(db, "services"), 
-        where("shopId", "==", shopData.id),
-        where("isActive", "==", true)
-      );
-
-      getDocs(servicesQuery).then((servSnap) => {
+    shopUnsubscribe = shopRepository.subscribeToShop(
+      shopSlug,
+      (shopData) => {
         if (!active) return;
-        const servicesList: Service[] = [];
-        servSnap.forEach((docSnap) => {
-          servicesList.push(docSnap.data() as Service);
-        });
-        set({ services: servicesList });
-        cacheData(`services_${shopData.id}`, servicesList); // Cache in IndexedDB
-        if (servicesList.length > 0 && !get().selectedServiceId) {
-          set({ selectedServiceId: servicesList[0].id });
+
+        if (!shopData) {
+          set({ shop: null, loadingShop: false });
+          return;
         }
-      }).catch((err) => {
+
+        set({ shop: shopData, loadingShop: false });
+        cacheData(`shop_${shopSlug}`, shopData); // Cache in IndexedDB
+
+        // Fetch services for this shop once
+        shopRepository.fetchServices(shopData.id)
+          .then((servicesList) => {
+            if (!active) return;
+            set({ services: servicesList });
+            cacheData(`services_${shopData.id}`, servicesList); // Cache in IndexedDB
+            if (servicesList.length > 0 && !get().selectedServiceId) {
+              set({ selectedServiceId: servicesList[0].id });
+            }
+          })
+          .catch((err) => {
+            if (active) {
+              if (!navigator.onLine) {
+                console.log("Offline: Using cached services");
+              } else {
+                handleFirestoreError(err, OperationType.GET, `services`);
+              }
+            }
+          });
+      },
+      (err) => {
         if (active) {
           if (!navigator.onLine) {
-            console.log("Offline: Using cached services");
+            console.log("Offline: Using cached shop details");
+            set({ loadingShop: false });
           } else {
-            handleFirestoreError(err, OperationType.GET, `services`);
+            console.error("Error loading customer portal shop sub:", err);
+            set({ loadingShop: false });
+            handleFirestoreError(err, OperationType.GET, `shops`);
           }
         }
-      });
-    }, (err) => {
-      if (active) {
-        if (!navigator.onLine) {
-          console.log("Offline: Using cached shop details");
-          set({ loadingShop: false });
-        } else {
-          console.error("Error loading customer portal shop sub:", err);
-          set({ loadingShop: false });
-          handleFirestoreError(err, OperationType.GET, `shops`);
-        }
       }
-    });
+    );
 
     return () => {
       active = false;
@@ -171,23 +162,17 @@ export const useShopStore = create<ShopState>((set, get) => ({
 
     let active = true;
 
-    const servicesQuery = query(
-      collection(db, "services"), 
-      where("shopId", "==", shopId),
-      where("isActive", "==", true)
+    servicesUnsubscribe = shopRepository.subscribeToServices(
+      shopId,
+      (servicesList) => {
+        if (!active) return;
+        set({ services: servicesList });
+        cacheData(`services_${shopId}`, servicesList);
+      },
+      (err) => {
+        console.error("Error in services real-time subscription:", err);
+      }
     );
-
-    servicesUnsubscribe = onSnapshot(servicesQuery, (servSnap) => {
-      if (!active) return;
-      const servicesList: Service[] = [];
-      servSnap.forEach((docSnap) => {
-        servicesList.push(docSnap.data() as Service);
-      });
-      set({ services: servicesList });
-      cacheData(`services_${shopId}`, servicesList);
-    }, (err) => {
-      console.error("Error in services real-time subscription:", err);
-    });
 
     return () => {
       active = false;
@@ -213,23 +198,16 @@ export const useShopStore = create<ShopState>((set, get) => ({
 
     let active = true;
 
-    const statusesQuery = query(
-      collection(db, "counter_statuses"),
-      where("shopId", "==", shopId)
+    counterStatusesUnsubscribe = shopRepository.subscribeToCounterStatuses(
+      shopId,
+      (list) => {
+        if (!active) return;
+        set({ counterStatuses: list });
+      },
+      (err) => {
+        console.error("Error fetching counter statuses:", err);
+      }
     );
-
-    counterStatusesUnsubscribe = onSnapshot(statusesQuery, (snapshot) => {
-      if (!active) return;
-      const list: any[] = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as any);
-      });
-      // Sort by counterNumber
-      list.sort((a, b) => a.counterNumber.localeCompare(b.counterNumber, undefined, { numeric: true, sensitivity: 'base' }));
-      set({ counterStatuses: list });
-    }, (err) => {
-      console.error("Error fetching counter statuses:", err);
-    });
 
     return () => {
       active = false;

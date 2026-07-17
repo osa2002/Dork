@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { useTranslation } from "react-i18next";
@@ -8,7 +8,7 @@ import { useUiStore } from "../store";
 // Icons
 import { 
   Users, Activity, Clock, QrCode as QrIcon, FileSpreadsheet, 
-  Monitor, CreditCard, LogOut, Sun, Moon, Volume2, VolumeX 
+  Monitor, CreditCard, LogOut, Sun, Moon, Volume2, VolumeX, Loader2
 } from "lucide-react";
 
 // Components
@@ -17,9 +17,10 @@ import { ConfirmationModal } from "./dashboard/ConfirmationModal";
 import { QueueTab } from "./dashboard/QueueTab";
 import { ServicesTab } from "./dashboard/ServicesTab";
 import { QrTab } from "./dashboard/QrTab";
-import { ReportsTab } from "./dashboard/ReportsTab";
 import { DisplaysTab } from "./dashboard/DisplaysTab";
 import { BillingTab } from "./dashboard/BillingTab";
+
+const ReportsTab = lazy(() => import("./dashboard/ReportsTab").then(m => ({ default: m.ReportsTab })));
 
 // Hooks
 import { useDashboardSettings } from "../hooks/useDashboardSettings";
@@ -46,16 +47,14 @@ export default function VendorDashboard({
   setIsDarkMode: _propSetIsDarkMode 
 }: VendorDashboardProps) {
   const { t, i18n } = useTranslation();
-  const isRtl = i18n.language === "ar";
+  const isRtl = (i18n.language || "ar").startsWith("ar");
 
-  const { 
-    isDarkMode, 
-    setIsDarkMode, 
-    activeDashboardTab: activeTab, 
-    setActiveDashboardTab: setActiveTab,
-    confirmModal,
-    setConfirmModal
-  } = useUiStore();
+  const isDarkMode = useUiStore((state) => state.isDarkMode);
+  const setIsDarkMode = useUiStore((state) => state.setIsDarkMode);
+  const activeTab = useUiStore((state) => state.activeDashboardTab);
+  const setActiveTab = useUiStore((state) => state.setActiveDashboardTab);
+  const confirmModal = useUiStore((state) => state.confirmModal);
+  const setConfirmModal = useUiStore((state) => state.setConfirmModal);
 
   // Selected queue path filter
   const [selectedQueueServiceId, setSelectedQueueServiceId] = useState<string>("all");
@@ -243,7 +242,7 @@ export default function VendorDashboard({
           
           {/* Sidebar Menu Panel */}
           <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-2 shadow-sm">
-            <div className={`text-xs font-black text-slate-400 px-3 pb-3 border-b border-slate-100 dark:border-slate-800 uppercase mb-2 ${isRtl ? "text-right" : "text-left"}`}>
+            <div className="text-xs font-black text-slate-400 px-3 pb-3 border-b border-slate-100 dark:border-slate-800 uppercase mb-2 text-start">
               {t("vend_sidebar_sections", "Dashboard Navigation")}
             </div>
 
@@ -259,7 +258,7 @@ export default function VendorDashboard({
               <Activity className="w-5 h-5 text-violet-500 shrink-0" />
               <span>{t("vend_active_queue", "Lobby Queues")}</span>
               {tickets.tickets.filter(tItem => tItem.status === "waiting").length > 0 && (
-                <span className={`${isRtl ? "mr-auto" : "ml-auto"} px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
+                <span className={`ms-auto px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
                   activeTab === "queue" ? "bg-white/20 text-white" : "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400 border border-violet-100/50 dark:border-violet-900/30"
                 }`}>
                   {tickets.tickets.filter(tItem => tItem.status === "waiting").length}
@@ -318,7 +317,7 @@ export default function VendorDashboard({
               <Monitor className="w-5 h-5 text-cyan-500 shrink-0" />
               <span>{t("vend_sidebar_displays", "Lobby Display Screens")}</span>
               {displays.displays.length > 0 && (
-                <span className={`${isRtl ? "mr-auto" : "ml-auto"} px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
+                <span className={`ms-auto px-2 py-0.5 rounded-full text-xs font-black transition-colors ${
                   activeTab === "displays" ? "bg-white/20 text-white" : "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400 border border-violet-100/50 dark:border-violet-900/30"
                 }`}>
                   {displays.displays.length}
@@ -338,7 +337,7 @@ export default function VendorDashboard({
               <CreditCard className="w-5 h-5 text-rose-500 shrink-0" />
               <span>{t("vend_sidebar_billing", "Plan Subscription")}</span>
               {shop?.plan === "pro" && (
-                <span className={`${isRtl ? "mr-auto" : "ml-auto"} px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white animate-pulse`}>
+                <span className="ms-auto px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white animate-pulse">
                   PRO
                 </span>
               )}
@@ -424,33 +423,40 @@ export default function VendorDashboard({
             )}
 
             {activeTab === "reports" && (
-              <ReportsTab
-                reportStartDate={analytics.reportStartDate}
-                setReportStartDate={analytics.setReportStartDate}
-                reportEndDate={analytics.reportEndDate}
-                setReportEndDate={analytics.setReportEndDate}
-                exportLoading={analytics.exportLoading}
-                reportError={analytics.reportError}
-                filteredReportTickets={analytics.filteredReportTickets}
-                totalReportCount={analytics.totalReportCount}
-                completedReportCount={analytics.completedReportCount}
-                cancelledReportCount={analytics.cancelledReportCount}
-                noShowReportCount={analytics.noShowReportCount}
-                averageReportWaitMinutes={analytics.averageReportWaitMinutes}
-                averageReportServiceMinutes={analytics.averageReportServiceMinutes}
-                satisfactionScore={analytics.satisfactionScore}
-                speedScore={analytics.speedScore}
-                qualityScore={analytics.qualityScore}
-                staffLeaderboard={analytics.staffLeaderboard}
-                dailyTrends={analytics.dailyTrends}
-                serviceDistribution={analytics.serviceDistribution}
-                handleExportCSV={analytics.handleExportCSV}
-                aiAnalysis={analytics.aiAnalysis}
-                aiLoading={analytics.aiLoading}
-                aiError={analytics.aiError}
-                handleAskAiDiagnostics={analytics.handleAskAiDiagnostics}
-                isRtl={isRtl}
-              />
+              <Suspense fallback={
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+                  <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                  <span className="text-xs text-slate-450 mt-2">Loading diagnostics...</span>
+                </div>
+              }>
+                <ReportsTab
+                  reportStartDate={analytics.reportStartDate}
+                  setReportStartDate={analytics.setReportStartDate}
+                  reportEndDate={analytics.reportEndDate}
+                  setReportEndDate={analytics.setReportEndDate}
+                  exportLoading={analytics.exportLoading}
+                  reportError={analytics.reportError}
+                  filteredReportTickets={analytics.filteredReportTickets}
+                  totalReportCount={analytics.totalReportCount}
+                  completedReportCount={analytics.completedReportCount}
+                  cancelledReportCount={analytics.cancelledReportCount}
+                  noShowReportCount={analytics.noShowReportCount}
+                  averageReportWaitMinutes={analytics.averageReportWaitMinutes}
+                  averageReportServiceMinutes={analytics.averageReportServiceMinutes}
+                  satisfactionScore={analytics.satisfactionScore}
+                  speedScore={analytics.speedScore}
+                  qualityScore={analytics.qualityScore}
+                  staffLeaderboard={analytics.staffLeaderboard}
+                  dailyTrends={analytics.dailyTrends}
+                  serviceDistribution={analytics.serviceDistribution}
+                  handleExportCSV={analytics.handleExportCSV}
+                  aiAnalysis={analytics.aiAnalysis}
+                  aiLoading={analytics.aiLoading}
+                  aiError={analytics.aiError}
+                  handleAskAiDiagnostics={analytics.handleAskAiDiagnostics}
+                  isRtl={isRtl}
+                />
+              </Suspense>
             )}
 
             {activeTab === "displays" && (

@@ -1,16 +1,6 @@
-import { useState, useEffect } from "react";
-import { 
-  collection, 
-  doc, 
-  onSnapshot, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where
-} from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { Display } from "../types";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useVendorStore } from "../store/vendor/vendorStore";
 
 interface UseDashboardDisplaysProps {
   shopId: string;
@@ -19,44 +9,31 @@ interface UseDashboardDisplaysProps {
 
 export function useDashboardDisplays({ shopId, showConfirmation }: UseDashboardDisplaysProps) {
   const { t } = useTranslation();
-  const [displays, setDisplays] = useState<Display[]>([]);
-  const [editingDisplayId, setEditingDisplayId] = useState<string | null>(null);
-  const [editingDisplayName, setEditingDisplayName] = useState("");
-  const [refreshingDisplayId, setRefreshingDisplayId] = useState<string | null>(null);
 
-  // Real-time listener for Displays
+  // Atomic selectors for state
+  const displays = useVendorStore((state) => state.displays);
+  const editingDisplayId = useVendorStore((state) => state.editingDisplayId);
+  const editingDisplayName = useVendorStore((state) => state.editingDisplayName);
+  const refreshingDisplayId = useVendorStore((state) => state.refreshingDisplayId);
+
+  // Atomic selectors for setters/actions
+  const setEditingDisplayId = useVendorStore((state) => state.setEditingDisplayId);
+  const setEditingDisplayName = useVendorStore((state) => state.setEditingDisplayName);
+  const subscribeToDisplays = useVendorStore((state) => state.subscribeToDisplays);
+  const handleRenameDisplay = useVendorStore((state) => state.handleRenameDisplay);
+  const handleDeleteDisplayFromStore = useVendorStore((state) => state.handleDeleteDisplay);
+  const handleRequestRefreshFromStore = useVendorStore((state) => state.handleRequestRefresh);
+
+  // Real-time listener for Displays delegated to Zustand store
   useEffect(() => {
     if (!shopId) return;
 
-    const displaysQuery = query(collection(db, "displays"), where("shopId", "==", shopId));
-    const unsubDisplays = onSnapshot(displaysQuery, (snapshot) => {
-      const displaysList: Display[] = [];
-      snapshot.forEach((docSnap) => {
-        displaysList.push(docSnap.data() as Display);
-      });
-      setDisplays(displaysList);
-    }, (error) => {
-      console.error("Error listening to displays:", error);
-      handleFirestoreError(error, OperationType.GET, `displays`);
-    });
-
+    const unsubDisplays = subscribeToDisplays(shopId);
     return () => unsubDisplays();
-  }, [shopId]);
+  }, [shopId, subscribeToDisplays]);
 
   const handleUpdateDisplayName = async (displayId: string) => {
-    if (!editingDisplayName.trim()) return;
-
-    try {
-      const displayDocRef = doc(db, "displays", displayId);
-      await updateDoc(displayDocRef, {
-        name: editingDisplayName.trim()
-      });
-      setEditingDisplayId(null);
-      setEditingDisplayName("");
-    } catch (err) {
-      console.error("Error updating display name:", err);
-      handleFirestoreError(err, OperationType.UPDATE, `displays/${displayId}`);
-    }
+    await handleRenameDisplay(displayId);
   };
 
   const handleDeleteDisplay = async (displayId: string) => {
@@ -64,30 +41,13 @@ export function useDashboardDisplays({ shopId, showConfirmation }: UseDashboardD
       t("vend_delete_display_title", { defaultValue: "Remove Display Screen" }),
       t("vend_confirm_delete_display", { defaultValue: "Are you sure you want to delete this public display screen link?" }),
       async () => {
-        try {
-          const displayDocRef = doc(db, "displays", displayId);
-          await deleteDoc(displayDocRef);
-        } catch (err) {
-          console.error("Error deleting display:", err);
-          handleFirestoreError(err, OperationType.DELETE, `displays/${displayId}`);
-        }
+        await handleDeleteDisplayFromStore(displayId);
       }
     );
   };
 
   const handleRequestRefresh = async (displayId: string) => {
-    setRefreshingDisplayId(displayId);
-    try {
-      const displayDocRef = doc(db, "displays", displayId);
-      await updateDoc(displayDocRef, {
-        refreshRequestedAt: new Date().toISOString()
-      });
-      setTimeout(() => setRefreshingDisplayId(null), 1000);
-    } catch (err) {
-      console.error("Error triggering display refresh:", err);
-      setRefreshingDisplayId(null);
-      handleFirestoreError(err, OperationType.UPDATE, `displays/${displayId}`);
-    }
+    await handleRequestRefreshFromStore(displayId);
   };
 
   return {

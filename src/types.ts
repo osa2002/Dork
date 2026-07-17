@@ -67,6 +67,7 @@ export interface Ticket {
   isScheduled?: boolean;
   scheduledDate?: string;
   scheduledTime?: string;
+  fcmToken?: string;
 }
 
 export interface FAQItem {

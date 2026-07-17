@@ -1,125 +1,48 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db, getFirebaseMessaging } from "../lib/firebase";
-import { getToken } from "firebase/messaging";
-import { playChime } from "../lib/audio";
+import { db } from "../lib/firebase";
 import { Ticket, Shop } from "../types";
+import { useNotificationStore } from "../store/notificationStore";
 
 export function useCustomerNotifications(myTicket: Ticket | null, shop: Shop | null, isRtl: boolean) {
-  const [pushPermission, setPushPermission] = useState<string>(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      return Notification.permission;
-    }
-    return "default";
-  });
-  const [hasShownApproachingPush, setHasShownApproachingPush] = useState(false);
-  const [hasShownOneInFrontFcm, setHasShownOneInFrontFcm] = useState(false);
-  const [fcmToken, setFcmToken] = useState<string | null>(null);
-  const [inAppAlert, setInAppAlert] = useState<{
-    show: boolean;
-    title: string;
-    message: string;
-    type: "approaching" | "next" | null;
-  }>({
-    show: false,
-    title: "",
-    message: "",
-    type: null,
-  });
-
-  const [openTroubleshootBrand, setOpenTroubleshootBrand] = useState<string | null>(null);
-  const [showDiagnosticsPanel, setShowDiagnosticsPanel] = useState<boolean>(false);
-
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("dork_sound_enabled") !== "false";
-    }
-    return true;
-  });
+  const pushPermission = useNotificationStore((s) => s.pushPermission);
+  const setPushPermission = useNotificationStore((s) => s.setPushPermission);
+  
+  const hasShownApproachingPush = useNotificationStore((s) => s.hasShownApproachingPush);
+  const setHasShownApproachingPush = useNotificationStore((s) => s.setHasShownApproachingPush);
+  
+  const hasShownOneInFrontFcm = useNotificationStore((s) => s.hasShownOneInFrontFcm);
+  const setHasShownOneInFrontFcm = useNotificationStore((s) => s.setHasShownOneInFrontFcm);
+  
+  const fcmToken = useNotificationStore((s) => s.fcmToken);
+  
+  const inAppAlert = useNotificationStore((s) => s.inAppAlert);
+  const setInAppAlert = useNotificationStore((s) => s.setInAppAlert);
+  
+  const openTroubleshootBrand = useNotificationStore((s) => s.openTroubleshootBrand);
+  const setOpenTroubleshootBrand = useNotificationStore((s) => s.setOpenTroubleshootBrand);
+  
+  const showDiagnosticsPanel = useNotificationStore((s) => s.showDiagnosticsPanel);
+  const setShowDiagnosticsPanel = useNotificationStore((s) => s.setShowDiagnosticsPanel);
+  
+  const soundEnabled = useNotificationStore((s) => s.soundEnabled);
+  
+  const handleToggleSound = useNotificationStore((s) => s.handleToggleSound);
+  const handleRequestPushPermissionAction = useNotificationStore((s) => s.handleRequestPushPermission);
+  const handleSendTestNotificationAction = useNotificationStore((s) => s.handleSendTestNotification);
+  const fetchFcmToken = useNotificationStore((s) => s.fetchFcmToken);
 
   const soundEnabledRef = useRef(soundEnabled);
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
-  const handleToggleSound = () => {
-    const newVal = !soundEnabled;
-    setSoundEnabled(newVal);
-    localStorage.setItem("dork_sound_enabled", String(newVal));
-    if (newVal) {
-      playChime();
-    }
-  };
-
-  const fetchFcmToken = async () => {
-    try {
-      const messaging = await getFirebaseMessaging();
-      if (!messaging) {
-        console.warn("FCM Messaging is not supported or failed to initialize.");
-        return null;
-      }
-
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        const token = await getToken(messaging);
-        if (token) {
-          console.log("FCM Token retrieved successfully:", token);
-          setFcmToken(token);
-          return token;
-        }
-      }
-    } catch (err) {
-      console.warn("Could not retrieve FCM token:", err);
-    }
-    return null;
-  };
-
   const handleRequestPushPermission = async () => {
-    if (!("Notification" in window)) {
-      alert(isRtl ? "متصفحك لا يدعم الإشعارات المباشرة." : "Your browser does not support push notifications.");
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    setPushPermission(permission);
-    if (permission === "granted") {
-      try {
-        new Notification(isRtl ? "تم تفعيل الإشعارات بنجاح! 🔔" : "Notifications enabled successfully! 🔔", {
-          body: isRtl ? "سنقوم بتنبيهك فور اقتراب دورك في الطابور." : "We will alert you once your turn is approaching.",
-        });
-      } catch (err: any) {
-        console.warn("Could not instantiate Notification directly on this device:", err.message);
-      }
-
-      // Fetch FCM token and update the ticket
-      const token = await fetchFcmToken();
-      if (token && myTicket) {
-        try {
-          const ticketRef = doc(db, "tickets", myTicket.id);
-          await updateDoc(ticketRef, { fcmToken: token });
-          console.log("[FCM] Successfully updated ticket with FCM registration token.");
-        } catch (err) {
-          console.error("[FCM] Error saving FCM token to ticket:", err);
-        }
-      }
-    }
+    await handleRequestPushPermissionAction(isRtl, myTicket);
   };
 
   const handleSendTestNotification = () => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      try {
-        new Notification(
-          isRtl ? "إشعار تجريبي من دورك 🔔" : "Test Notification from Dork 🔔",
-          {
-            body: isRtl
-              ? `هكذا ستتلقى التنبيهات الفورية من متصفحك فور اقتراب دورك لدى ${shop?.name || ""}.`
-              : `This is how you will receive instant alerts from your browser when your turn approaches at ${shop?.name || ""}.`,
-            icon: "/favicon.ico",
-          }
-        );
-      } catch (err: any) {
-        console.warn("Could not instantiate test Notification:", err.message);
-      }
-    }
+    handleSendTestNotificationAction(isRtl, shop?.name || "");
   };
 
   // Automatically fetch FCM token and sync to Firestore ticket if already granted permission
@@ -134,7 +57,7 @@ export function useCustomerNotifications(myTicket: Ticket | null, shop: Shop | n
         }
       });
     }
-  }, [myTicket?.id, fcmToken]);
+  }, [myTicket?.id, fcmToken, fetchFcmToken]);
 
   return {
     pushPermission,

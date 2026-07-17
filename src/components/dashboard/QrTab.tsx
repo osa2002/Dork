@@ -162,11 +162,11 @@ export function QrTab({
                   type="text"
                   readOnly
                   value={shop?.slug ? `${window.location.origin}/portal/${shop.slug}` : ""}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 px-4 py-3.5 pr-24 rounded-2xl text-[11px] font-black focus:outline-none focus:ring-0 truncate"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 px-4 py-3.5 pe-24 rounded-2xl text-[11px] font-black focus:outline-none focus:ring-0 truncate"
                 />
                 <button
                   onClick={handleCopyLink}
-                  className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] px-3.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow"
+                  className="absolute end-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] px-3.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow"
                   id="btn-copy-link"
                 >
                   {copied ? (
@@ -384,9 +384,7 @@ export function QrTab({
                   }`}
                 >
                   <span className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm ${
-                    workingHoursEnabled 
-                      ? (isRtl ? "right-6" : "left-6") 
-                      : (isRtl ? "right-1" : "left-1")
+                    workingHoursEnabled ? "start-6" : "start-1"
                   }`} />
                 </button>
               </div>
@@ -461,9 +459,7 @@ export function QrTab({
                     }`}
                   >
                     <span className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm ${
-                      soundEnabled 
-                        ? (isRtl ? "right-6" : "left-6") 
-                        : (isRtl ? "right-1" : "left-1")
+                      soundEnabled ? "start-6" : "start-1"
                     }`} />
                   </button>
                 </div>
@@ -482,9 +478,7 @@ export function QrTab({
                     }`}
                   >
                     <span className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm ${
-                      voiceAnnouncementsEnabled 
-                        ? (isRtl ? "right-6" : "left-6") 
-                        : (isRtl ? "right-1" : "left-1")
+                      voiceAnnouncementsEnabled ? "start-6" : "start-1"
                     }`} />
                   </button>
                 </div>
@@ -554,9 +548,7 @@ export function QrTab({
                       }`}
                     >
                       <span className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm ${
-                        browserNotificationsEnabled 
-                          ? (isRtl ? "right-6" : "left-6") 
-                          : (isRtl ? "right-1" : "left-1")
+                        browserNotificationsEnabled ? "start-6" : "start-1"
                       }`} />
                     </button>
                   </div>

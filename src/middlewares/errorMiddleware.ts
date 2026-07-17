@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError } from "../errors/CustomErrors";
+import { ServerLogger, logContextStorage } from "../lib/serverLogger";
 
 export function globalErrorHandler(
   err: any,
@@ -7,8 +8,13 @@ export function globalErrorHandler(
   res: Response,
   next: NextFunction
 ): void {
-  // Log the full error internally on the server for admin troubleshooting
-  console.error(`[API Error] ${req.method} ${req.originalUrl}:`, err);
+  const correlationId = logContextStorage.getStore()?.correlationId || (res.getHeader("X-Correlation-ID") as string);
+
+  // Log the full structured error internally on the server
+  ServerLogger.error(`[API Error] ${req.method} ${req.originalUrl}`, err, {
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
 
   res.setHeader("Content-Type", "application/problem+json");
 
@@ -19,6 +25,7 @@ export function globalErrorHandler(
       status: err.status,
       detail: err.detail,
       instance: req.originalUrl,
+      correlationId,
     };
 
     if (err.invalidParams) {
@@ -34,9 +41,11 @@ export function globalErrorHandler(
     type: "https://api.dorkqueue.com/errors/internal-server-error",
     title: "Internal Server Error",
     status: 500,
-    detail: "An unexpected error occurred. Please try again later or contact support.",
+    detail: err.message || "An unexpected error occurred. Please try again later or contact support.",
     instance: req.originalUrl,
+    correlationId,
   };
 
   res.status(500).json(genericErrorResponse);
 }
+

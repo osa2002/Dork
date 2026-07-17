@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { TelemetryService } from "../services/TelemetryService";
 import { initializeApp as initializeAdminApp, applicationDefault, getApps as getAdminApps } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
@@ -68,12 +69,25 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
   }
 
   async getShop(shopId: string): Promise<any | null> {
-    const shopDocRef = clientDoc(this.clientDb, "shops", shopId);
-    const shopDoc = await clientGetDoc(shopDocRef);
-    return shopDoc.exists() ? shopDoc.data() : null;
+    const span = TelemetryService.startSpan("firestore:getShop");
+    span.setAttribute("shopId", shopId);
+    try {
+      const shopDocRef = clientDoc(this.clientDb, "shops", shopId);
+      const shopDoc = await clientGetDoc(shopDocRef);
+      span.setAttribute("count", 1);
+      span.end();
+      return shopDoc.exists() ? shopDoc.data() : null;
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async getTodayTicketsMaxNumber(shopId: string, startOfToday: string): Promise<number> {
+    const span = TelemetryService.startSpan("firestore:getTodayTicketsMaxNumber");
+    span.setAttribute("shopId", shopId);
     let maxTicketNumInDb = 0;
     try {
       const ticketsQuery = clientQuery(
@@ -81,6 +95,7 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
         clientWhere("shopId", "==", shopId)
       );
       const ticketsSnap = await clientGetDocs(ticketsQuery);
+      span.setAttribute("count", ticketsSnap.size);
       ticketsSnap.forEach((docSnap) => {
         const t = docSnap.data();
         if (t && t.createdAt >= startOfToday) {
@@ -90,7 +105,11 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
           }
         }
       });
-    } catch (err) {
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
       console.warn("[DatabaseProvider] Client max ticket fallback query warn:", err);
     }
     return maxTicketNumInDb;
@@ -103,79 +122,122 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
     planType: string,
     isDemoShop: boolean
   ): Promise<number> {
+    const span = TelemetryService.startSpan("firestore:incrementTicketNumberTransaction");
+    span.setAttribute("shopId", shopId);
     let nextTicketNumber = 1;
-    const shopDocRef = clientDoc(this.clientDb, "shops", shopId);
+    try {
+      const shopDocRef = clientDoc(this.clientDb, "shops", shopId);
 
-    await clientRunTransaction(this.clientDb, async (transaction: any) => {
-      const shopSnap = await transaction.get(shopDocRef);
-      if (!shopSnap.exists()) {
-        throw new Error("Shop not found in transaction");
-      }
-      const shopData = shopSnap.data();
-      const storedDate = shopData.date || "";
+      await clientRunTransaction(this.clientDb, async (transaction: any) => {
+        const shopSnap = await transaction.get(shopDocRef);
+        if (!shopSnap.exists()) {
+          throw new Error("Shop not found in transaction");
+        }
+        const shopData = shopSnap.data();
+        const storedDate = shopData.date || "";
 
-      let currentCount = 0;
-      if (storedDate === dayKey) {
-        currentCount = shopData.lastTicketNumber || 0;
-      }
+        let currentCount = 0;
+        if (storedDate === dayKey) {
+          currentCount = shopData.lastTicketNumber || 0;
+        }
 
-      const baseCount = Math.max(currentCount, maxTicketNumInDb);
+        const baseCount = Math.max(currentCount, maxTicketNumInDb);
 
-      if (planType === "free" && baseCount >= 5 && !isDemoShop) {
-        throw new Error("FREE_PLAN_LIMIT_REACHED");
-      }
+        if (planType === "free" && baseCount >= 5 && !isDemoShop) {
+          throw new Error("FREE_PLAN_LIMIT_REACHED");
+        }
 
-      nextTicketNumber = baseCount + 1;
+        nextTicketNumber = baseCount + 1;
 
-      transaction.set(
-        shopDocRef,
-        { lastTicketNumber: nextTicketNumber, date: dayKey },
-        { merge: true }
-      );
-    });
+        transaction.set(
+          shopDocRef,
+          { lastTicketNumber: nextTicketNumber, date: dayKey },
+          { merge: true }
+        );
+      });
+      span.setAttribute("count", 2);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
 
     return nextTicketNumber;
   }
 
   async saveTicket(ticketId: string, ticketData: any): Promise<void> {
-    const ref = clientDoc(this.clientDb, "tickets", ticketId);
-    await clientSetDoc(ref, ticketData);
+    const span = TelemetryService.startSpan("firestore:saveTicket");
+    span.setAttribute("ticketId", ticketId);
+    try {
+      const ref = clientDoc(this.clientDb, "tickets", ticketId);
+      await clientSetDoc(ref, ticketData);
+      span.setAttribute("count", 1);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async getTicketsCreatedBefore(timestamp: string): Promise<any[]> {
-    const ticketsQuery = clientQuery(
-      clientCollection(this.clientDb, "tickets"),
-      clientWhere("createdAt", "<", timestamp)
-    );
-    const snapshot = await clientGetDocs(ticketsQuery);
-    return snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+    const span = TelemetryService.startSpan("firestore:getTicketsCreatedBefore");
+    try {
+      const ticketsQuery = clientQuery(
+        clientCollection(this.clientDb, "tickets"),
+        clientWhere("createdAt", "<", timestamp)
+      );
+      const snapshot = await clientGetDocs(ticketsQuery);
+      span.setAttribute("count", snapshot.size);
+      span.end();
+      return snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async archiveAndDeleteTickets(tickets: { id: string; data: any }[]): Promise<void> {
-    let batch = clientWriteBatch(this.clientDb);
-    let operationsInBatch = 0;
+    const span = TelemetryService.startSpan("firestore:archiveAndDeleteTickets");
+    span.setAttribute("ticketsCount", tickets.length);
+    try {
+      let batch = clientWriteBatch(this.clientDb);
+      let operationsInBatch = 0;
 
-    for (const ticket of tickets) {
-      const archiveRef = clientDoc(this.clientDb, "archived_tickets", ticket.id);
-      batch.set(archiveRef, {
-        ...ticket.data,
-        archivedAt: new Date().toISOString()
-      });
+      for (const ticket of tickets) {
+        const archiveRef = clientDoc(this.clientDb, "archived_tickets", ticket.id);
+        batch.set(archiveRef, {
+          ...ticket.data,
+          archivedAt: new Date().toISOString()
+        });
 
-      const ticketRef = clientDoc(this.clientDb, "tickets", ticket.id);
-      batch.delete(ticketRef);
+        const ticketRef = clientDoc(this.clientDb, "tickets", ticket.id);
+        batch.delete(ticketRef);
 
-      operationsInBatch += 2;
+        operationsInBatch += 2;
 
-      if (operationsInBatch >= 400) {
-        await batch.commit();
-        batch = clientWriteBatch(this.clientDb);
-        operationsInBatch = 0;
+        if (operationsInBatch >= 400) {
+          await batch.commit();
+          batch = clientWriteBatch(this.clientDb);
+          operationsInBatch = 0;
+        }
       }
-    }
 
-    if (operationsInBatch > 0) {
-      await batch.commit();
+      if (operationsInBatch > 0) {
+        await batch.commit();
+      }
+      span.setAttribute("count", tickets.length * 2);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
     }
   }
 
@@ -185,16 +247,19 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
     invoiceData: any,
     planExpiresAt: string
   ): Promise<void> {
+    const span = TelemetryService.startSpan("firestore:upgradeShopToProWithInvoice");
+    span.setAttribute("shopId", shopId);
+    span.setAttribute("invoiceId", invoiceId);
     const SERVER_SECRET = process.env.STRIPE_VERIFICATION_TOKEN || "DORK_SERVER_SECRET_987654321_PRO_TOKEN";
 
     // 1. Create temporary verification handshake document
     const verificationDocRef = clientDoc(this.clientDb, "shops", shopId, "private", "verification");
-    await clientSetDoc(verificationDocRef, {
-      serverSecret: SERVER_SECRET,
-      createdAt: new Date().toISOString()
-    });
-
     try {
+      await clientSetDoc(verificationDocRef, {
+        serverSecret: SERVER_SECRET,
+        createdAt: new Date().toISOString()
+      });
+
       // 2. Save Invoice
       const invoiceDocRef = clientDoc(this.clientDb, "shops", shopId, "invoices", invoiceId);
       await clientSetDoc(invoiceDocRef, invoiceData);
@@ -205,6 +270,13 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
         plan: "pro",
         planExpiresAt: planExpiresAt
       }, { merge: true });
+      span.setAttribute("count", 3);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
     } finally {
       // 4. Cleanup the temporary verification document
       await clientDeleteDoc(verificationDocRef);
@@ -266,15 +338,29 @@ export class AdminDatabaseProvider implements IDatabaseProvider {
   }
 
   async getShop(shopId: string): Promise<any | null> {
-    const docRef = this.adminDb.collection("shops").doc(shopId);
-    const snap = await docRef.get();
-    return snap.exists ? snap.data() : null;
+    const span = TelemetryService.startSpan("firestore:getShop");
+    span.setAttribute("shopId", shopId);
+    try {
+      const docRef = this.adminDb.collection("shops").doc(shopId);
+      const snap = await docRef.get();
+      span.setAttribute("count", 1);
+      span.end();
+      return snap.exists ? snap.data() : null;
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async getTodayTicketsMaxNumber(shopId: string, startOfToday: string): Promise<number> {
+    const span = TelemetryService.startSpan("firestore:getTodayTicketsMaxNumber");
+    span.setAttribute("shopId", shopId);
     let maxTicketNumInDb = 0;
     try {
       const snap = await this.adminDb.collection("tickets").where("shopId", "==", shopId).get();
+      span.setAttribute("count", snap.size);
       snap.forEach((docSnap: any) => {
         const t = docSnap.data();
         if (t && t.createdAt >= startOfToday) {
@@ -284,7 +370,11 @@ export class AdminDatabaseProvider implements IDatabaseProvider {
           }
         }
       });
-    } catch (err) {
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
       console.warn("[DatabaseProvider] Admin max ticket fallback query warn:", err);
     }
     return maxTicketNumInDb;
@@ -297,75 +387,118 @@ export class AdminDatabaseProvider implements IDatabaseProvider {
     planType: string,
     isDemoShop: boolean
   ): Promise<number> {
+    const span = TelemetryService.startSpan("firestore:incrementTicketNumberTransaction");
+    span.setAttribute("shopId", shopId);
     let nextTicketNumber = 1;
     const shopDocRef = this.adminDb.collection("shops").doc(shopId);
 
-    await this.adminDb.runTransaction(async (transaction: any) => {
-      const shopSnap = await transaction.get(shopDocRef);
-      if (!shopSnap.exists) {
-        throw new Error("Shop not found in transaction");
-      }
-      const shopData = shopSnap.data() || {};
-      const storedDate = shopData.date || "";
+    try {
+      await this.adminDb.runTransaction(async (transaction: any) => {
+        const shopSnap = await transaction.get(shopDocRef);
+        if (!shopSnap.exists) {
+          throw new Error("Shop not found in transaction");
+        }
+        const shopData = shopSnap.data() || {};
+        const storedDate = shopData.date || "";
 
-      let currentCount = 0;
-      if (storedDate === dayKey) {
-        currentCount = shopData.lastTicketNumber || 0;
-      }
+        let currentCount = 0;
+        if (storedDate === dayKey) {
+          currentCount = shopData.lastTicketNumber || 0;
+        }
 
-      const baseCount = Math.max(currentCount, maxTicketNumInDb);
+        const baseCount = Math.max(currentCount, maxTicketNumInDb);
 
-      if (planType === "free" && baseCount >= 5 && !isDemoShop) {
-        throw new Error("FREE_PLAN_LIMIT_REACHED");
-      }
+        if (planType === "free" && baseCount >= 5 && !isDemoShop) {
+          throw new Error("FREE_PLAN_LIMIT_REACHED");
+        }
 
-      nextTicketNumber = baseCount + 1;
+        nextTicketNumber = baseCount + 1;
 
-      transaction.set(
-        shopDocRef,
-        { lastTicketNumber: nextTicketNumber, date: dayKey },
-        { merge: true }
-      );
-    });
+        transaction.set(
+          shopDocRef,
+          { lastTicketNumber: nextTicketNumber, date: dayKey },
+          { merge: true }
+        );
+      });
+      span.setAttribute("count", 2);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
 
     return nextTicketNumber;
   }
 
   async saveTicket(ticketId: string, ticketData: any): Promise<void> {
-    const ref = this.adminDb.collection("tickets").doc(ticketId);
-    await ref.set(ticketData);
+    const span = TelemetryService.startSpan("firestore:saveTicket");
+    span.setAttribute("ticketId", ticketId);
+    try {
+      const ref = this.adminDb.collection("tickets").doc(ticketId);
+      await ref.set(ticketData);
+      span.setAttribute("count", 1);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async getTicketsCreatedBefore(timestamp: string): Promise<any[]> {
-    const snap = await this.adminDb.collection("tickets").where("createdAt", "<", timestamp).get();
-    return snap.docs.map((d: any) => ({ id: d.id, data: d.data() }));
+    const span = TelemetryService.startSpan("firestore:getTicketsCreatedBefore");
+    try {
+      const snap = await this.adminDb.collection("tickets").where("createdAt", "<", timestamp).get();
+      span.setAttribute("count", snap.size);
+      span.end();
+      return snap.docs.map((d: any) => ({ id: d.id, data: d.data() }));
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 
   async archiveAndDeleteTickets(tickets: { id: string; data: any }[]): Promise<void> {
-    let batch = this.adminDb.batch();
-    let operationsInBatch = 0;
+    const span = TelemetryService.startSpan("firestore:archiveAndDeleteTickets");
+    span.setAttribute("ticketsCount", tickets.length);
+    try {
+      let batch = this.adminDb.batch();
+      let operationsInBatch = 0;
 
-    for (const ticket of tickets) {
-      const archiveRef = this.adminDb.collection("archived_tickets").doc(ticket.id);
-      batch.set(archiveRef, {
-        ...ticket.data,
-        archivedAt: new Date().toISOString()
-      });
+      for (const ticket of tickets) {
+        const archiveRef = this.adminDb.collection("archived_tickets").doc(ticket.id);
+        batch.set(archiveRef, {
+          ...ticket.data,
+          archivedAt: new Date().toISOString()
+        });
 
-      const ticketRef = this.adminDb.collection("tickets").doc(ticket.id);
-      batch.delete(ticketRef);
+        const ticketRef = this.adminDb.collection("tickets").doc(ticket.id);
+        batch.delete(ticketRef);
 
-      operationsInBatch += 2;
+        operationsInBatch += 2;
 
-      if (operationsInBatch >= 400) {
-        await batch.commit();
-        batch = this.adminDb.batch();
-        operationsInBatch = 0;
+        if (operationsInBatch >= 400) {
+          await batch.commit();
+          batch = this.adminDb.batch();
+          operationsInBatch = 0;
+        }
       }
-    }
 
-    if (operationsInBatch > 0) {
-      await batch.commit();
+      if (operationsInBatch > 0) {
+        await batch.commit();
+      }
+      span.setAttribute("count", tickets.length * 2);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
     }
   }
 
@@ -375,17 +508,26 @@ export class AdminDatabaseProvider implements IDatabaseProvider {
     invoiceData: any,
     planExpiresAt: string
   ): Promise<void> {
-    // Elegant: Admin SDK is a privileged backend identity. It bypasses Security Rules entirely.
-    // Therefore, writing a temporary token document is completely unneeded, reducing unnecessary
-    // database operations and maximizing security in production environments.
-    const invoiceDocRef = this.adminDb.collection("shops").doc(shopId).collection("invoices").doc(invoiceId);
-    await invoiceDocRef.set(invoiceData);
+    const span = TelemetryService.startSpan("firestore:upgradeShopToProWithInvoice");
+    span.setAttribute("shopId", shopId);
+    span.setAttribute("invoiceId", invoiceId);
+    try {
+      const invoiceDocRef = this.adminDb.collection("shops").doc(shopId).collection("invoices").doc(invoiceId);
+      await invoiceDocRef.set(invoiceData);
 
-    const shopDocRef = this.adminDb.collection("shops").doc(shopId);
-    await shopDocRef.set({
-      plan: "pro",
-      planExpiresAt: planExpiresAt
-    }, { merge: true });
+      const shopDocRef = this.adminDb.collection("shops").doc(shopId);
+      await shopDocRef.set({
+        plan: "pro",
+        planExpiresAt: planExpiresAt
+      }, { merge: true });
+      span.setAttribute("count", 2);
+      span.end();
+    } catch (err: any) {
+      span.setAttribute("error", true);
+      span.setAttribute("error.message", err.message);
+      span.end();
+      throw err;
+    }
   }
 }
 

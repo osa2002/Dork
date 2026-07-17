@@ -299,7 +299,7 @@ export function BillingTab({
               <span>{t("vend_invoices_history_title", "Invoice & Payment History")}</span>
             </h4>
 
-            <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
+            <div className="space-y-3.5 max-h-[300px] overflow-y-auto pe-1">
               {invoices.length > 0 ? (
                 invoices.map((inv) => (
                   <div 

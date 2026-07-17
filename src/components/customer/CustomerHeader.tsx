@@ -48,7 +48,7 @@ export function CustomerHeader({
             <Users className="w-5 h-5" />
           </div>
         )}
-        <div className={isRtl ? "text-right" : "text-left"}>
+        <div className="text-start">
           <h1 className="text-base font-black text-slate-900 leading-none">{shop.name}</h1>
           <span className="text-[10px] text-indigo-600 font-bold mt-0.5 block">
             {translateCategory(shop.category)}

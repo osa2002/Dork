@@ -52,7 +52,7 @@ export function CustomerShareModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-1.5 rounded-full transition-all cursor-pointer"
+          className="absolute top-4 end-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-1.5 rounded-full transition-all cursor-pointer"
         >
           <XCircle className="w-4 h-4" />
         </button>
@@ -75,7 +75,7 @@ export function CustomerShareModal({
 
         {/* Copy Link Container */}
         <div className="bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-2xl p-3 flex items-center justify-between gap-2.5">
-          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold truncate dir-ltr select-all flex-1 text-left">
+          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold truncate dir-ltr select-all flex-1 text-start">
             {directUrl}
           </span>
           

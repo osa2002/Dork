@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Shop, Service } from "../types";
+import { useShallow } from "zustand/react/shallow";
 import { useShopStore } from "../store";
 
 export function useCustomerShop(shopSlug: string) {
@@ -15,7 +16,19 @@ export function useCustomerShop(shopSlug: string) {
     setSelectedServiceId,
     subscribeToShop,
     subscribeToCounterStatuses,
-  } = useShopStore();
+  } = useShopStore(
+    useShallow((state) => ({
+      shop: state.shop,
+      services: state.services,
+      counterStatuses: state.counterStatuses,
+      loadingShop: state.loadingShop,
+      setLoadingShop: state.setLoadingShop,
+      selectedServiceId: state.selectedServiceId,
+      setSelectedServiceId: state.setSelectedServiceId,
+      subscribeToShop: state.subscribeToShop,
+      subscribeToCounterStatuses: state.subscribeToCounterStatuses,
+    }))
+  );
 
   const [historicalAvgDuration, setHistoricalAvgDuration] = useState<number | null>(null);
 
@@ -29,6 +42,7 @@ export function useCustomerShop(shopSlug: string) {
           collection(db, "tickets"),
           where("shopId", "==", shop.id),
           where("status", "==", "completed"),
+          limit(50)
         );
         const snap = await getDocs(q);
         const completedTickets = snap.docs

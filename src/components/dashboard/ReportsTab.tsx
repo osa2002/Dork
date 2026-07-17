@@ -100,7 +100,7 @@ export function ReportsTab({
 
         <div className="flex items-center gap-2">
           {reportError && (
-            <span className="text-[10px] text-rose-500 font-bold max-w-xs truncate mr-2">
+            <span className="text-[10px] text-rose-500 font-bold max-w-xs truncate me-2">
               ⚠️ {reportError}
             </span>
           )}
@@ -226,7 +226,7 @@ export function ReportsTab({
             </h4>
           </div>
 
-          <div className="space-y-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[220px] pe-1">
             {staffLeaderboard.length > 0 ? (
               staffLeaderboard.map((staff, index) => {
                 let prizeIcon = "👤";
@@ -289,7 +289,7 @@ export function ReportsTab({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[160px] text-xs leading-relaxed space-y-2 text-slate-300 scrollbar-thin scrollbar-thumb-slate-800 pr-1">
+          <div className="flex-1 overflow-y-auto max-h-[160px] text-xs leading-relaxed space-y-2 text-slate-300 scrollbar-thin scrollbar-thumb-slate-800 pe-1">
             {aiLoading ? (
               <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400 gap-2">
                 <BrainCircuit className="w-8 h-8 text-indigo-400 animate-pulse" />

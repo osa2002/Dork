@@ -69,7 +69,7 @@ export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, is
     setIsInstallable(false);
   };
 
-  const isRtl = i18n.language === "ar";
+  const isRtl = (i18n.language || "ar").startsWith("ar");
 
   const features = [
     {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, XCircle, ArrowUp } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useShallow } from "zustand/react/shallow";
 import { useUiStore } from "../store";
 
 // Shared Utilities
@@ -22,7 +23,7 @@ import { CustomerShareModal } from "./customer/CustomerShareModal";
 import { CustomerPwaModal } from "./customer/CustomerPwaModal";
 import { CustomerTicketBoard } from "./customer/CustomerTicketBoard";
 import { CustomerInAppAlertModal } from "./customer/CustomerInAppAlertModal";
-import { CustomerErrorAlertModal } from "./customer/CustomerErrorAlertModal";
+import { CustomerAlertModal } from "./customer/CustomerAlertModal";
 import { LimitAlertDialog } from "./LimitAlertDialog";
 
 interface CustomerPortalProps {
@@ -39,7 +40,7 @@ export default function CustomerPortal({
   setIsDarkMode: _propSetIsDarkMode 
 }: CustomerPortalProps) {
   const { t, i18n } = useTranslation();
-  const isRtl = i18n.language === "ar";
+  const isRtl = (i18n.language || "ar").startsWith("ar");
 
   const {
     isDarkMode,
@@ -56,7 +57,24 @@ export default function CustomerPortal({
     setShowInstallBanner,
     isStandalone,
     setIsStandalone
-  } = useUiStore();
+  } = useUiStore(
+    useShallow((state) => ({
+      isDarkMode: state.isDarkMode,
+      setIsDarkMode: state.setIsDarkMode,
+      copied: state.copied,
+      setCopied: state.setCopied,
+      showShareModal: state.showShareModal,
+      setShowShareModal: state.setShowShareModal,
+      showPwaModal: state.showPwaModal,
+      setShowPwaModal: state.setShowPwaModal,
+      deferredPrompt: state.deferredPrompt,
+      setDeferredPrompt: state.setDeferredPrompt,
+      showInstallBanner: state.showInstallBanner,
+      setShowInstallBanner: state.setShowInstallBanner,
+      isStandalone: state.isStandalone,
+      setIsStandalone: state.setIsStandalone,
+    }))
+  );
 
   const translateCategory = (cat: string): string => {
     if (!cat) return "";
@@ -450,7 +468,7 @@ export default function CustomerPortal({
       {showScrollFab && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="fixed bottom-6 right-6 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full shadow-lg text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-95 transition-all cursor-pointer z-40"
+          className="fixed bottom-6 end-6 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full shadow-lg text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 active:scale-95 transition-all cursor-pointer z-40"
           aria-label={t("customer_btn_scroll_top")}
         >
           <ArrowUp className="w-5 h-5 animate-pulse" />
@@ -486,8 +504,8 @@ export default function CustomerPortal({
         isRtl={isRtl}
       />
 
-      {/* 4. Global Error Alert Dialog */}
-      <CustomerErrorAlertModal 
+      {/* 4. Global Alert Dialog */}
+      <CustomerAlertModal 
         isOpen={showAlert}
         onClose={() => setShowAlert(false)}
         errorMessage={errorMessage}
@@ -497,6 +515,7 @@ export default function CustomerPortal({
       <LimitAlertDialog 
         isOpen={showLimitModal} 
         onClose={() => setShowLimitModal(false)} 
+        isRtl={isRtl}
       />
     </div>
   );

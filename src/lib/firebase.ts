@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getMessaging, isSupported } from "firebase/messaging";
 import { getAnalytics, logEvent, isSupported as isAnalyticsSupported } from "firebase/analytics";
@@ -16,15 +16,43 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with custom databaseId
-const db = getFirestore(app, config.firestoreDatabaseId);
+// Initialize Firestore with custom databaseId and long polling to bypass iframe/proxy connection blocks
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, config.firestoreDatabaseId);
+
+// Enable IndexedDB offline persistence for high reliability in offline/poor-network scenarios
+if (typeof window !== "undefined") {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === "failed-precondition") {
+      // Multiple tabs open, persistence can only be enabled in one tab at a time.
+      console.warn("Firestore offline persistence failed-precondition (multiple tabs open).");
+    } else if (err.code === "unimplemented") {
+      // The current browser does not support all of the features required to enable persistence
+      console.warn("Firestore offline persistence is unimplemented in this browser.");
+    } else {
+      console.warn("Firestore offline persistence initialization failed:", err);
+    }
+  });
+}
 
 const auth = getAuth(app);
 
 let analytics: any = null;
 
-// Lazily and safely check if Analytics is supported
-if (typeof window !== "undefined") {
+// Detect if we are inside a sandboxed/preview iframe or dev mode to prevent "Failed to fetch" block errors
+const isIframe = typeof window !== "undefined" && (
+  window.self !== window.top ||
+  (window.location?.hostname && window.location.hostname.includes("run.app")) ||
+  (window.location?.hostname && window.location.hostname.includes("ai.studio"))
+);
+const isDev = typeof window !== "undefined" && (
+  window.location?.hostname === "localhost" ||
+  window.location?.hostname === "127.0.0.1"
+);
+
+// Only initialize Firebase Analytics if we are in a direct production domain (not inside sandbox iframe/dev)
+if (typeof window !== "undefined" && !isIframe && !isDev) {
   isAnalyticsSupported().then((supported) => {
     if (supported) {
       analytics = getAnalytics(app);
@@ -33,6 +61,8 @@ if (typeof window !== "undefined") {
   }).catch((err) => {
     console.warn("Firebase Analytics support check failed or is not supported:", err);
   });
+} else {
+  console.log("Firebase Analytics initialization skipped in development/preview/iframe environment.");
 }
 
 /**

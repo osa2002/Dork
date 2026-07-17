@@ -44,7 +44,7 @@ interface AuthScreenProps {
 
 export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, setIsDarkMode }: AuthScreenProps) {
   const { t, i18n } = useTranslation();
-  const isRtl = i18n.language === "ar";
+  const isRtl = (i18n.language || "ar").startsWith("ar");
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -488,7 +488,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
 
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl overflow-hidden relative z-10 transition-all">
         {/* Top Control Rail inside card */}
-        <div className={`absolute top-4 ${isRtl ? "left-4 flex-row-reverse" : "right-4 flex-row"} flex items-center gap-2`}>
+        <div className="absolute top-4 end-4 flex flex-row items-center gap-2">
           <LanguageSwitcher />
 
           {/* Dark Mode Toggle Button */}
@@ -532,18 +532,18 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
           </div>
 
           {error && (
-            <div className={`mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs font-bold rounded-2xl flex items-start gap-2.5 ${isRtl ? "text-right" : "text-left"}`}>
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs font-bold rounded-2xl flex items-start gap-2.5 text-start">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleAuth} className={`space-y-4 ${isRtl ? "text-right" : "text-left"}`}>
+          <form onSubmit={handleAuth} className="space-y-4 text-start">
             {/* Common Auth Fields */}
             <div>
               <label className="block text-xs font-black text-slate-500 mb-1.5 px-1">{t("auth_field_email")}</label>
               <div className="relative">
-                <span className={`absolute inset-y-0 ${isRtl ? "right-0 pr-3.5" : "left-0 pl-3.5"} flex items-center text-slate-400 pointer-events-none`}>
+                <span className="absolute inset-y-0 start-0 ps-3.5 flex items-center text-slate-400 pointer-events-none">
                   <Mail className="w-4 h-4" />
                 </span>
                 <input 
@@ -552,7 +552,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@shop.com"
                   dir="ltr"
-                  className={`w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ${isRtl ? "pr-10 pl-4 text-right" : "pl-10 pr-4 text-left"}`}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ps-10 pe-4 text-start"
                   required
                 />
               </div>
@@ -561,7 +561,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
             <div>
               <label className="block text-xs font-black text-slate-500 mb-1.5 px-1">{t("auth_field_password")}</label>
               <div className="relative">
-                <span className={`absolute inset-y-0 ${isRtl ? "right-0 pr-3.5" : "left-0 pl-3.5"} flex items-center text-slate-400 pointer-events-none`}>
+                <span className="absolute inset-y-0 start-0 ps-3.5 flex items-center text-slate-400 pointer-events-none">
                   <Lock className="w-4 h-4" />
                 </span>
                 <input 
@@ -570,13 +570,13 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   dir="ltr"
-                  className={`w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ${isRtl ? "pr-10 pl-10 text-right" : "pl-10 pr-10 text-left"}`}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ps-10 pe-10 text-start"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className={`absolute inset-y-0 ${isRtl ? "left-0 pl-3" : "right-0 pr-3"} flex items-center text-slate-400 hover:text-slate-600 cursor-pointer`}
+                  className="absolute inset-y-0 end-0 pe-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -594,7 +594,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                   <div>
                     <label className="block text-xs font-black text-slate-500 mb-1.5 px-1">{t("auth_field_shop_name")}</label>
                     <div className="relative">
-                      <span className={`absolute inset-y-0 ${isRtl ? "right-0 pr-3.5" : "left-0 pl-3.5"} flex items-center text-slate-400 pointer-events-none`}>
+                      <span className="absolute inset-y-0 start-0 ps-3.5 flex items-center text-slate-400 pointer-events-none">
                         <Store className="w-4 h-4" />
                       </span>
                       <input 
@@ -602,7 +602,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                         value={shopName}
                         onChange={handleShopNameChange}
                         placeholder={isRtl ? "مثال: صالون النخبة، عيادة د. محمد" : "e.g., Elite Barber, Dr. Mark Clinic"}
-                        className={`w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ${isRtl ? "pr-10 pl-4 text-right" : "pl-10 pr-4 text-left"}`}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ps-10 pe-4 text-start"
                         required
                       />
                     </div>
@@ -611,13 +611,13 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                   <div>
                     <label className="block text-xs font-black text-slate-500 mb-1.5 px-1">{t("auth_field_shop_category")}</label>
                     <div className="relative">
-                      <span className={`absolute inset-y-0 ${isRtl ? "right-0 pr-3.5" : "left-0 pl-3.5"} flex items-center text-slate-400 pointer-events-none`}>
+                      <span className="absolute inset-y-0 start-0 ps-3.5 flex items-center text-slate-400 pointer-events-none">
                         <Tag className="w-4 h-4" />
                       </span>
                       <select 
                         value={shopCategory}
                         onChange={(e) => setShopCategory(e.target.value)}
-                        className={`w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all appearance-none cursor-pointer ${isRtl ? "pr-10 pl-4 text-right" : "pl-10 pr-4 text-left"}`}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all appearance-none cursor-pointer ps-10 pe-4 text-start"
                       >
                         {Object.entries(categoriesMap).map(([key, val]) => (
                           <option key={key} value={key}>
@@ -631,7 +631,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                   <div>
                     <label className="block text-xs font-black text-slate-500 mb-1.5 px-1">{t("auth_field_shop_slug")}</label>
                     <div className="relative">
-                      <span className={`absolute inset-y-0 ${isRtl ? "right-0 pr-3.5" : "left-0 pl-3.5"} flex items-center text-slate-400 pointer-events-none`}>
+                      <span className="absolute inset-y-0 start-0 ps-3.5 flex items-center text-slate-400 pointer-events-none">
                         <LinkIcon className="w-4 h-4" />
                       </span>
                       <input 
@@ -640,7 +640,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                         onChange={handleSlugChange}
                         placeholder="elite-lounge"
                         dir="ltr"
-                        className={`w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ${isRtl ? "pr-10 pl-4 text-right" : "pl-10 pr-4 text-left"}`}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white text-slate-900 text-sm font-semibold py-3 rounded-2xl outline-none transition-all placeholder:text-slate-300 ps-10 pe-4 text-start"
                         required
                       />
                     </div>
@@ -713,7 +713,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
                 setIsLogin(!isLogin);
                 setError(null);
               }}
-              className={`text-indigo-600 font-black hover:underline cursor-pointer ${isRtl ? "mr-1.5" : "ml-1.5"}`}
+              className="text-indigo-600 font-black hover:underline cursor-pointer ms-1.5"
             >
               {isLogin ? t("auth_toggle_register_now") : t("auth_toggle_login_now")}
             </button>

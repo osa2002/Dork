@@ -92,7 +92,7 @@ export function CustomerJoinForm({
       {!isOnline && (
         <div className="mb-6 bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
           <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-          <div className={isRtl ? "text-right" : "text-left"}>
+          <div className="text-start">
             <h4 className="text-[11px] font-black text-amber-950 uppercase tracking-wider">
               {t("customer_offline_mode_title", "Offline Mode Enabled")}
             </h4>
@@ -117,7 +117,7 @@ export function CustomerJoinForm({
               <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow shadow-violet-200 dark:shadow-none">
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </div>
-              <div className={isRtl ? "text-right" : "text-left"}>
+              <div className="text-start">
                 <h4 className="text-[11px] font-black text-violet-950 dark:text-violet-200 uppercase tracking-wide">
                   {t("customer_active_pro_plan")}
                 </h4>
@@ -149,7 +149,7 @@ export function CustomerJoinForm({
                 }`}>
                   <TicketIcon className="w-4 h-4" />
                 </div>
-                <div className={isRtl ? "text-right" : "text-left"}>
+                <div className="text-start">
                   <h4 className={`text-[11px] font-black ${
                     remaining === 0 
                       ? "text-rose-950 dark:text-rose-200" 
@@ -455,7 +455,7 @@ export function CustomerJoinForm({
             <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
               <Smartphone className="w-5 h-5" />
             </div>
-            <div className={isRtl ? "text-right" : "text-left"}>
+            <div className="text-start">
               <h4 className="text-xs font-black text-slate-900 dark:text-white">
                 {t("customer_pin_to_home_title")}
               </h4>

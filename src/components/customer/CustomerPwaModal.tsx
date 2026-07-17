@@ -35,7 +35,7 @@ export function CustomerPwaModal({ isOpen, onClose, isRtl }: CustomerPwaModalPro
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-1.5 rounded-full transition-all cursor-pointer"
+          className="absolute top-4 end-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-1.5 rounded-full transition-all cursor-pointer"
         >
           <XCircle className="w-4 h-4" />
         </button>
@@ -58,11 +58,11 @@ export function CustomerPwaModal({ isOpen, onClose, isRtl }: CustomerPwaModalPro
 
         {/* Instructions container */}
         <div className="bg-slate-50 dark:bg-slate-950/30 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/60 text-slate-700 dark:text-slate-300 space-y-3">
-          <div className={`text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider ${isRtl ? "text-right" : "text-left"}`}>
+          <div className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider text-start">
             {isRtl ? "خطوات التثبيت البسيطة" : "Quick Installation Steps"}
           </div>
           {/iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent) ? (
-            <p className={`text-[11px] leading-relaxed font-bold ${isRtl ? "text-right" : "text-left"}`}>
+            <p className="text-[11px] leading-relaxed font-bold text-start">
               {isRtl ? (
                 <>
                   ١. اضغط على زر المشاركة <span className="inline-block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">⎋</span> في شريط Safari السفلي.
@@ -78,7 +78,7 @@ export function CustomerPwaModal({ isOpen, onClose, isRtl }: CustomerPwaModalPro
               )}
             </p>
           ) : (
-            <p className={`text-[11px] leading-relaxed font-bold ${isRtl ? "text-right" : "text-left"}`}>
+            <p className="text-[11px] leading-relaxed font-bold text-start">
               {isRtl ? (
                 <>
                   ١. اضغط على زر الخيارات الثلاث نقاط <span className="font-extrabold">⋮</span> في زاوية المتصفح العليا.

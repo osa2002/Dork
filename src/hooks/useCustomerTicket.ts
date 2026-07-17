@@ -15,6 +15,7 @@ import { Ticket, Shop, Service } from "../types";
 import { playChime } from "../lib/audio";
 import { cacheData, getCachedData, getPendingTickets, deletePendingTicket } from "../lib/offlineDb";
 import { getClientStartOfTodayInTimezone } from "../lib/shopUtils";
+import { useShallow } from "zustand/react/shallow";
 import { useQueueStore } from "../store";
 
 
@@ -75,7 +76,32 @@ export function useCustomerTicket({
     joinQueue,
     leaveQueue,
     syncOfflineTickets
-  } = useQueueStore();
+  } = useQueueStore(
+    useShallow((state) => ({
+      myTicket: state.myTicket,
+      setMyTicket: state.setMyTicket,
+      todayTickets: state.todayTickets,
+      setTodayTickets: state.setTodayTickets,
+      subscribeToTodayTickets: state.subscribeToTodayTickets,
+      subscribeToMyTicket: state.subscribeToMyTicket,
+      unsubscribeMyTicket: state.unsubscribeMyTicket,
+      joining: state.joining,
+      setJoining: state.setJoining,
+      isOnline: state.isOnline,
+      setIsOnline: state.setIsOnline,
+      errorMessage: state.errorMessage,
+      setErrorMessage: state.setErrorMessage,
+      showAlert: state.showAlert,
+      setShowAlert: state.setShowAlert,
+      aiEstimateMessage: state.aiEstimateMessage,
+      setAiEstimateMessage: state.setAiEstimateMessage,
+      aiEstimateLoading: state.aiEstimateLoading,
+      setAiEstimateLoading: state.setAiEstimateLoading,
+      joinQueue: state.joinQueue,
+      leaveQueue: state.leaveQueue,
+      syncOfflineTickets: state.syncOfflineTickets,
+    }))
+  );
 
   const [showCancelConfirm, setShowCancelConfirm] = useState<boolean>(false);
   const [showLimitModal, setShowLimitModal] = useState<boolean>(false);

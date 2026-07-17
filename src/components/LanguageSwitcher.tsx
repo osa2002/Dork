@@ -4,7 +4,7 @@ import { Globe, ChevronDown } from "lucide-react";
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
-  const currentLang = i18n.language || "ar";
+  const currentLang = (i18n.language || "ar").split("-")[0];
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +45,7 @@ export default function LanguageSwitcher() {
       </button>
 
       {isOpen && (
-        <div className={`absolute ${currentLang === "ar" ? "left-0" : "right-0"} mt-2 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg py-1 z-50`}>
+        <div className="absolute end-0 mt-2 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg py-1 z-50">
           {languages.map((lang) => (
             <button
               key={lang.code}

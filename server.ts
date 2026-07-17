@@ -8,10 +8,40 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+
+import { getHealth, getReady, getLive, getVersion, getMetrics, getFeatureFlags } from "./src/controllers/observabilityController";
+import { AuditLogService } from "./src/services/AuditLogService";
+import { SLOService } from "./src/services/SLOService";
+import {
+  getAuditLogs,
+  createAuditLog,
+  getIncidents,
+  createIncident,
+  resolveIncident,
+  addIncidentTimeline,
+  getSLOStatus,
+  getDisasterRecoveryStatus,
+  simulateRecovery,
+  verifyBackups,
+  getRunbooks,
+  getRetentionPolicy,
+  updateRetentionPolicy,
+  getGovernanceSummary
+} from "./src/controllers/governanceController";
+import { observabilityMiddleware } from "./src/middlewares/observabilityMiddleware";
+import { ConfigValidator } from "./src/services/ConfigValidator";
+import { ShutdownManager } from "./src/services/ShutdownManager";
+import { TelemetryService } from "./src/services/TelemetryService";
+import { MetricsService } from "./src/services/MetricsService";
 
 import { getDatabaseProvider } from "./src/lib/DatabaseProvider";
 import { validateRequest } from "./src/middlewares/validationMiddleware";
 import { globalErrorHandler } from "./src/middlewares/errorMiddleware";
+import { authenticateFirebaseUser } from "./src/middlewares/authMiddleware";
+import { correlationIdMiddleware } from "./src/lib/serverLogger";
 import {
   AppError,
   ValidationError,
@@ -121,16 +151,140 @@ function getEndOfTodayInTimezone(startOfTodayISO: string): string {
 }
 
 async function startServer() {
+  // 0. Startup Configuration Verification (Phase 6.8)
+  try {
+    ConfigValidator.validate();
+  } catch (err: any) {
+    console.error(`[Startup Failure] Critical configuration error detected: ${err.message}`);
+    process.exit(1);
+  }
+
   const app = express();
   const PORT = 3000;
 
+  // 1. Enable standard CORS middleware
+  app.use(
+    cors({
+      origin: true,
+      credentials: false,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+    })
+  );
+
+  // 2. Enable Helmet for production-grade security headers & CSP
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "'unsafe-eval'",
+            "https://js.stripe.com",
+            "https://apis.google.com"
+          ],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "https://fonts.googleapis.com"
+          ],
+          fontSrc: [
+            "'self'",
+            "https://fonts.gstatic.com",
+            "data:"
+          ],
+          connectSrc: [
+            "'self'",
+            "https://*.firestore.googleapis.com",
+            "wss://*.firestore.googleapis.com",
+            "https://*.firebaseio.com",
+            "wss://*.firebaseio.com",
+            "https://*.googleapis.com",
+            "wss://*.googleapis.com",
+            "https://identitytoolkit.googleapis.com",
+            "https://securetoken.googleapis.com",
+            "https://fcm.googleapis.com",
+            "https://fcmregistration.googleapis.com",
+            "https://api.stripe.com",
+            "https://api.twilio.com"
+          ],
+          frameSrc: [
+            "'self'",
+            "https://js.stripe.com",
+            "https://checkout.stripe.com"
+          ],
+          frameAncestors: [
+            "'self'",
+            "https://ai.studio",
+            "https://*.google.com",
+            "https://*.run.app",
+            "https://*.europe-west2.run.app"
+          ],
+          imgSrc: [
+            "'self'",
+            "data:",
+            "https://*.googleusercontent.com",
+            "https://*.firebaseusercontent.com"
+          ],
+          objectSrc: ["'none'"],
+          upgradeInsecureRequests: []
+        }
+      },
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" }
+    })
+  );
+
+  // Observability, Metrics & Enterprise Health Endpoints (Phase 6.1)
+  app.get("/health", getHealth);
+  app.get("/ready", getReady);
+  app.get("/live", getLive);
+  app.get("/version", getVersion);
+  app.get("/api/metrics", getMetrics);
+  app.get("/api/features", getFeatureFlags);
+
+  // Enterprise Governance, Audit Logging & Disaster Recovery Backend Endpoints (Phase 6.1)
+  app.get("/api/governance/summary", getGovernanceSummary);
+  app.get("/api/governance/audit-logs", getAuditLogs);
+  app.post("/api/governance/audit-logs", createAuditLog);
+  app.get("/api/governance/incidents", getIncidents);
+  app.post("/api/governance/incidents", createIncident);
+  app.post("/api/governance/incidents/:id/resolve", resolveIncident);
+  app.post("/api/governance/incidents/:id/timeline", addIncidentTimeline);
+  app.get("/api/governance/slo", getSLOStatus);
+  app.get("/api/governance/disaster-recovery", getDisasterRecoveryStatus);
+  app.post("/api/governance/disaster-recovery/simulate", simulateRecovery);
+  app.post("/api/governance/disaster-recovery/verify-backups", verifyBackups);
+  app.get("/api/governance/runbooks", getRunbooks);
+  app.get("/api/governance/retention", getRetentionPolicy);
+  app.post("/api/governance/retention", updateRetentionPolicy);
+
+  // 3. API Rate Limiting to prevent denial-of-wallet and abuse
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Limit each IP to 200 requests per 15 minutes
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      status: 429,
+      error: "Too many requests from this IP, please try again later."
+    }
+  });
+  app.use("/api/", apiLimiter);
+
   app.use(express.json());
+  app.use(correlationIdMiddleware);
+  app.use(observabilityMiddleware);
 
   // API Route to send email
   app.post("/api/send-email", validateRequest(sendEmailSchema), async (req, res, next) => {
     const { email, name, ticketNumber, serviceName, shopName, lang } = req.body;
 
     const isAr = lang === "ar";
+    const smtpSpan = TelemetryService.startSpan("smtp:sendMail");
+    smtpSpan.setAttribute("mail.to", email);
 
     try {
       let transporter;
@@ -229,12 +383,19 @@ async function startServer() {
         console.log(`Email Test Preview URL: ${previewUrl}`);
       }
 
+      smtpSpan.end();
+      MetricsService.recordNotificationOutcome(true);
+
       return res.status(200).json({
         success: true,
         messageId: info.messageId,
         previewUrl: previewUrl || null,
       });
     } catch (err: any) {
+      smtpSpan.setAttribute("error", true);
+      smtpSpan.setAttribute("error.message", err.message);
+      smtpSpan.end();
+      MetricsService.recordNotificationOutcome(false);
       next(err);
     }
   });
@@ -295,8 +456,14 @@ async function startServer() {
     const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
     const twilioWA = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
 
+    const twilioSpan = TelemetryService.startSpan("twilio:sendDirect");
+    twilioSpan.setAttribute("twilio.to", toPhone);
+    twilioSpan.setAttribute("twilio.is_whatsapp", isWhatsapp);
+
     if (!accountSid || !authToken) {
       console.log(`[Twilio Simulation] Simulated Direct Send to ${toPhone} via ${isWhatsapp ? "WhatsApp" : "SMS"}: "${bodyText}"`);
+      twilioSpan.setAttribute("twilio.simulated", true);
+      twilioSpan.end();
       return { simulated: true, recipient: toPhone, body: bodyText };
     }
 
@@ -306,6 +473,9 @@ async function startServer() {
 
     if (!fromNumber) {
       console.warn(`[Twilio Warning] Missing sender phone number for ${isWhatsapp ? "WhatsApp" : "SMS"}. Falling back to simulation.`);
+      twilioSpan.setAttribute("twilio.simulated", true);
+      twilioSpan.setAttribute("twilio.warning", "Missing sender phone number");
+      twilioSpan.end();
       return { simulated: true, recipient: toPhone, body: bodyText };
     }
 
@@ -332,9 +502,16 @@ async function startServer() {
       }
 
       console.log(`[Twilio Direct Send Success] Message Sid: ${data.sid}`);
+      twilioSpan.setAttribute("twilio.sid", data.sid);
+      twilioSpan.end();
+      MetricsService.recordNotificationOutcome(true);
       return { success: true, sid: data.sid, recipient: toPhone };
     } catch (err: any) {
       console.error(`[Twilio Direct Send Error] Failed to send message directly:`, err.message);
+      twilioSpan.setAttribute("error", true);
+      twilioSpan.setAttribute("error.message", err.message);
+      twilioSpan.end();
+      MetricsService.recordNotificationOutcome(false);
       return { simulated: true, recipient: toPhone, body: bodyText, warning: err.message };
     }
   }
@@ -476,7 +653,26 @@ async function startServer() {
         createdAt: new Date().toISOString()
       };
 
+      const ticketStart = Date.now();
       await dbProvider.saveTicket(randomId, cleanTicket);
+      const ticketDuration = Date.now() - ticketStart;
+      SLOService.recordTicketCreation(ticketDuration);
+      MetricsService.recordTicketCreated();
+
+      // Log ticket creation to the audit logs
+      AuditLogService.log({
+        userId: null,
+        shopId,
+        actor: customerName,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"] || "unknown",
+        operation: "TICKET_CREATE",
+        entity: "Ticket",
+        newValue: cleanTicket,
+        result: "SUCCESS",
+        duration: ticketDuration,
+        severity: "INFO"
+      });
 
       // Trigger server-side welcome notifications
       const origin = req.headers.origin || "http://localhost:3000";
@@ -519,9 +715,11 @@ async function startServer() {
 
       const response = await messagingService.send(message);
       console.log("[FCM] Successfully sent message via FCM:", response);
+      MetricsService.recordNotificationOutcome(true);
       return res.status(200).json({ success: true, messageId: response });
     } catch (err: any) {
       console.log("[FCM] Real FCM sending unconfigured or lacks permission. Falling back to simulated delivery.");
+      MetricsService.recordNotificationOutcome(true); // Treat sandbox simulation as successful outcome in fallback mode
 
       return res.status(200).json({
         success: true,
@@ -598,22 +796,54 @@ Calculate a smart, reassuring, and precise wait time prediction based on the peo
 Return ONLY a short, friendly, reassuring, and natural sentence in ${isAr ? "Arabic" : "English"} explaining the expected wait time (e.g. "الوقت المتوقع لانتظارك هو 14 دقيقة" or "We estimate your wait time to be around 14 minutes").
 Do NOT write any preambles, markdown formatting, or system debug output. Return a direct customer-facing friendly notification.`;
 
-      const response = await aiClient.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
-      return res.json({ estimateMessage: response.text?.trim() || getFallbackEstimate() });
+      const aiSpan = TelemetryService.startSpan("gemini:generateContent");
+      aiSpan.setAttribute("model", "gemini-2.5-flash");
+      aiSpan.setAttribute("task", "estimate-wait-time");
+
+      const aiStart = Date.now();
+      try {
+        const response = await aiClient.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+        });
+        const duration = Date.now() - aiStart;
+        SLOService.recordAiResponse(duration);
+        aiSpan.end();
+        MetricsService.recordAiRequest();
+
+        AuditLogService.log({
+          actor: "Customer",
+          operation: "AI_ESTIMATE_WAIT_TIME",
+          entity: "AI",
+          result: "SUCCESS",
+          duration,
+          severity: "INFO"
+        });
+
+        return res.json({ estimateMessage: response.text?.trim() || getFallbackEstimate() });
+      } catch (innerErr: any) {
+        aiSpan.setAttribute("error", true);
+        aiSpan.setAttribute("error.message", innerErr.message);
+        aiSpan.end();
+        throw innerErr;
+      }
     } catch (err: any) {
       console.log("[Gemini API] Quota exhausted or service error. Gracefully falling back to deterministic estimate:", err.message || err);
       return res.json({ estimateMessage: getFallbackEstimate() });
     }
   });
 
-  // AI Queue Density Analysis Endpoint using Gemini
-  app.post("/api/analyze-queue", validateRequest(analyzeQueueSchema), async (req, res, next) => {
+  // AI Queue Density Analysis Endpoint using Gemini (Secured)
+  app.post("/api/analyze-queue", authenticateFirebaseUser, validateRequest(analyzeQueueSchema), async (req, res, next) => {
     const apiKey = process.env.GEMINI_API_KEY;
+    const verifiedShopId = (req as any).shopId;
     const { shopData, stats, lang } = req.body;
     const isAr = lang === "ar";
+
+    // Enforce authorization by sanitizing the shop ID
+    if (shopData) {
+      shopData.id = verifiedShopId;
+    }
 
     // Dynamic detailed deterministic fallback analysis for 100% uptime
     const getFallbackAnalysis = () => {
@@ -678,69 +908,153 @@ Queue Data and Statistics:
 ${JSON.stringify(stats, null, 2)}
 Please return the analysis in ${isAr ? "Arabic" : "English"}.`;
 
-      const response = await aiClient.models.generateContent({
-        // FIX: "gemini-3.5-flash" does not exist and always failed. Use a real,
-        // currently available model name.
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          systemInstruction: `You are an expert operations research and queue optimization system.
+      const aiSpan = TelemetryService.startSpan("gemini:generateContent");
+      aiSpan.setAttribute("model", "gemini-2.5-flash");
+      aiSpan.setAttribute("task", "analyze-queue");
+
+      try {
+        const response = await aiClient.models.generateContent({
+          // FIX: "gemini-3.5-flash" does not exist and always failed. Use a real,
+          // currently available model name.
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            systemInstruction: `You are an expert operations research and queue optimization system.
 Analyze the traffic metrics (ticket creation hours, days of week, average wait and service times) and recommend the absolute best operating hours, staffing allocations, and insights.
 Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "English"}. Make the language professional, action-oriented, and perfectly clear.`,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              optimalHoursStart: { type: Type.STRING, description: "Recommended start time, e.g. '09:00' or '10:00'" },
-              optimalHoursEnd: { type: Type.STRING, description: "Recommended end time, e.g. '18:00' or '20:00'" },
-              peakDensityHours: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "Peak crowd hours, e.g. ['12:00', '13:00']"
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                optimalHoursStart: { type: Type.STRING, description: "Recommended start time, e.g. '09:00' or '10:00'" },
+                optimalHoursEnd: { type: Type.STRING, description: "Recommended end time, e.g. '18:00' or '20:00'" },
+                peakDensityHours: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "Peak crowd hours, e.g. ['12:00', '13:00']"
+                },
+                slowHours: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "Quiet hours, e.g. ['09:00', '21:00']"
+                },
+                insights: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "3-4 actionable traffic insights based on the patterns"
+                },
+                staffingRecommendations: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "3-4 staffing level suggestions for peaks or quiet hours"
+                },
+                summary: {
+                  type: Type.STRING,
+                  description: "Brief reasoning summary"
+                }
               },
-              slowHours: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "Quiet hours, e.g. ['09:00', '21:00']"
-              },
-              insights: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "3-4 actionable traffic insights based on the patterns"
-              },
-              staffingRecommendations: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "3-4 staffing level suggestions for peaks or quiet hours"
-              },
-              summary: {
-                type: Type.STRING,
-                description: "Brief reasoning summary"
-              }
-            },
-            required: [
-              "optimalHoursStart",
-              "optimalHoursEnd",
-              "peakDensityHours",
-              "slowHours",
-              "insights",
-              "staffingRecommendations",
-              "summary"
-            ]
+              required: [
+                "optimalHoursStart",
+                "optimalHoursEnd",
+                "peakDensityHours",
+                "slowHours",
+                "insights",
+                "staffingRecommendations",
+                "summary"
+              ]
+            }
           }
+        });
+
+        const text = response.text;
+        if (!text) {
+          throw new Error("Empty response from Gemini");
         }
-      });
 
-      const text = response.text;
-      if (!text) {
-        throw new Error("Empty response from Gemini");
+        aiSpan.end();
+        MetricsService.recordAiRequest();
+
+        const result = JSON.parse(text);
+        return res.json(result);
+      } catch (innerErr: any) {
+        aiSpan.setAttribute("error", true);
+        aiSpan.setAttribute("error.message", innerErr.message);
+        aiSpan.end();
+        throw innerErr;
       }
-
-      const result = JSON.parse(text);
-      return res.json(result);
     } catch (err: any) {
       console.log("[Gemini API] Quota exhausted or service error. Gracefully falling back to deterministic analysis:", err.message || err);
       return res.json(getFallbackAnalysis());
+    }
+  });
+
+  // AI Queue Diagnostics Endpoint for vendor analytics report insights (Secured)
+  app.post("/api/ai-diagnose", authenticateFirebaseUser, async (req, res, next) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const { stats, lang } = req.body;
+    const isAr = lang === "ar" || (req.headers["accept-language"]?.includes("ar"));
+
+    const getFallbackAnalysis = () => {
+      if (isAr) {
+        return "تسير عملياتك بسلاسة مع فترات ذروة يمكن التنبؤ بها. سيؤدي دعم موظفي الخدمة الإضافيين أثناء فترات بعد الظهر المزدحمة إلى تحسين رضا العملاء وتجربتهم.";
+      } else {
+        return "Your operations are running smoothly with predictable peak periods. Adding support during afternoon rushes will improve customer satisfaction.";
+      }
+    };
+
+    if (!apiKey) {
+      return res.json({ analysis: getFallbackAnalysis() });
+    }
+
+    try {
+      const aiClient = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      });
+
+      const prompt = `Analyze this shop queue data and generate a short, high-level operational diagnostics advisory report for the vendor:
+${JSON.stringify(stats, null, 2)}
+Please return the analysis in ${isAr ? "Arabic" : "English"}.
+Make it a concise 2-3 paragraph summary focusing on staffing level recommendations and wait time improvements. Do not return markdown code blocks, just plain text.`;
+
+      const aiSpan = TelemetryService.startSpan("gemini:generateContent");
+      aiSpan.setAttribute("model", "gemini-2.5-flash");
+      aiSpan.setAttribute("task", "ai-diagnose");
+
+      const aiStart = Date.now();
+      try {
+        const response = await aiClient.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+        });
+        const duration = Date.now() - aiStart;
+        SLOService.recordAiResponse(duration);
+        aiSpan.end();
+        MetricsService.recordAiRequest();
+
+        AuditLogService.log({
+          userId: (req as any).user?.uid,
+          shopId: (req as any).shopId || null,
+          actor: (req as any).user?.email || "Vendor",
+          ip: req.ip,
+          userAgent: req.headers["user-agent"] || "unknown",
+          operation: "AI_DIAGNOSE_QUEUE",
+          entity: "AI",
+          result: "SUCCESS",
+          duration,
+          severity: "INFO"
+        });
+
+        return res.json({ analysis: response.text?.trim() || getFallbackAnalysis() });
+      } catch (innerErr: any) {
+        aiSpan.setAttribute("error", true);
+        aiSpan.setAttribute("error.message", innerErr.message);
+        aiSpan.end();
+        throw innerErr;
+      }
+    } catch (err) {
+      console.error("[Gemini API Error] ai-diagnose fallback triggered:", err);
+      return res.json({ analysis: getFallbackAnalysis() });
     }
   });
 
@@ -786,10 +1100,13 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
     return stripeClient;
   }
 
-  // Route to create a Stripe checkout session for a shop upgrade
-  app.post("/api/stripe/create-checkout-session", validateRequest(createCheckoutSessionSchema), async (req, res, next) => {
-    const { shopId, lang } = req.body;
+  // Unified secured Stripe checkout session creator handler
+  const createCheckoutSessionHandler = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Override body shopId with verified shopId from ID Token to remove client trust
+    const verifiedShopId = (req as any).shopId;
+    req.body.shopId = verifiedShopId;
 
+    const { shopId, lang } = req.body;
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const isAr = lang === "ar";
     const origin = req.headers.origin || "http://localhost:3000";
@@ -802,6 +1119,9 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
       console.log(`[Stripe Sandbox] STRIPE_SECRET_KEY not set. Redirecting to local secure mock gateway: ${mockCheckoutUrl}`);
       return res.status(200).json({ success: true, url: mockCheckoutUrl, isMock: true });
     }
+
+    const stripeSpan = TelemetryService.startSpan("stripe:createSession");
+    stripeSpan.setAttribute("shopId", shopId);
 
     try {
       const stripe = getStripeInstance();
@@ -831,16 +1151,29 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
         },
       });
 
+      stripeSpan.end();
+      MetricsService.recordStripeRequest();
+
       return res.status(200).json({ success: true, url: session.url });
     } catch (err: any) {
+      stripeSpan.setAttribute("error", true);
+      stripeSpan.setAttribute("error.message", err.message);
+      stripeSpan.end();
       next(err);
     }
-  });
+  };
 
-  // Route to verify completed checkout session and apply PRO upgrade
-  app.get("/api/stripe/verify-session", validateRequest(verifySessionSchema), async (req, res, next) => {
+  // Route bindings for checkout session creation
+  app.post("/api/stripe/create-checkout-session", authenticateFirebaseUser, validateRequest(createCheckoutSessionSchema), createCheckoutSessionHandler);
+  app.post("/api/checkout-session", authenticateFirebaseUser, validateRequest(createCheckoutSessionSchema), createCheckoutSessionHandler);
+
+  // Unified secured Stripe checkout verification handler
+  const verifySessionHandler = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Override query shopId with verified shopId from ID Token to remove client trust
+    const verifiedShopId = (req as any).shopId;
+    req.query.shopId = verifiedShopId;
+
     const { sessionId, shopId } = req.query;
-
     const stripeKey = process.env.STRIPE_SECRET_KEY;
 
     // Handle mock verification if key is missing and sessionId is mock
@@ -853,7 +1186,7 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
           
           const invoiceData = {
             id: invoiceId,
-            shopId: shopId,
+            shopId: shopId as string,
             invoiceNumber: invoiceNum,
             amount: "$20.00 USD",
             planName: "PRO Plan (30 Days) - Stripe Mock",
@@ -865,8 +1198,42 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
 
           const planExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
+          const paymentStart = Date.now();
           // Upgrade using Provider Abstraction
           await dbProvider.upgradeShopToProWithInvoice(shopId as string, invoiceId, invoiceData, planExpiresAt);
+          const duration = Date.now() - paymentStart;
+
+          SLOService.recordPayment(duration);
+
+          AuditLogService.log({
+            userId: (req as any).user?.uid || null,
+            shopId: shopId as string,
+            actor: (req as any).user?.email || "Vendor",
+            ip: req.ip,
+            userAgent: req.headers["user-agent"] || "unknown",
+            operation: "STRIPE_PAYMENT_SANDBOX",
+            entity: "Subscription",
+            oldValue: "free",
+            newValue: "pro",
+            result: "SUCCESS",
+            duration,
+            severity: "INFO"
+          });
+
+          AuditLogService.log({
+            userId: (req as any).user?.uid || null,
+            shopId: shopId as string,
+            actor: (req as any).user?.email || "Vendor",
+            ip: req.ip,
+            userAgent: req.headers["user-agent"] || "unknown",
+            operation: "SUBSCRIPTION_CHANGE",
+            entity: "Subscription",
+            oldValue: "free",
+            newValue: "pro",
+            result: "SUCCESS",
+            duration,
+            severity: "INFO"
+          });
 
           console.log(`[Stripe Mock Sandbox] Upgraded Shop ${shopId} to PRO. Invoice ${invoiceNum} generated successfully.`);
 
@@ -883,6 +1250,9 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
         throw new ValidationError("Stripe secret key is missing. Please set STRIPE_SECRET_KEY in settings.");
       }
     }
+
+    const verifySpan = TelemetryService.startSpan("stripe:retrieveSession");
+    verifySpan.setAttribute("sessionId", sessionId as string);
 
     try {
       const stripe = getStripeInstance();
@@ -921,7 +1291,7 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
 
         const invoiceData = {
           id: invoiceId,
-          shopId: shopId,
+          shopId: shopId as string,
           invoiceNumber: invoiceNum,
           amount: "$20.00 USD",
           planName: "PRO Plan (30 Days) - Stripe Checkout",
@@ -933,10 +1303,47 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
 
         const planExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
+        const paymentStart = Date.now();
         // Upgrade using Provider Abstraction
         await dbProvider.upgradeShopToProWithInvoice(shopId as string, invoiceId, invoiceData, planExpiresAt);
+        const duration = Date.now() - paymentStart;
+
+        SLOService.recordPayment(duration);
+
+        AuditLogService.log({
+          userId: (req as any).user?.uid || null,
+          shopId: shopId as string,
+          actor: (req as any).user?.email || "Vendor",
+          ip: req.ip,
+          userAgent: req.headers["user-agent"] || "unknown",
+          operation: "STRIPE_PAYMENT",
+          entity: "Subscription",
+          oldValue: "free",
+          newValue: "pro",
+          result: "SUCCESS",
+          duration,
+          severity: "INFO"
+        });
+
+        AuditLogService.log({
+          userId: (req as any).user?.uid || null,
+          shopId: shopId as string,
+          actor: (req as any).user?.email || "Vendor",
+          ip: req.ip,
+          userAgent: req.headers["user-agent"] || "unknown",
+          operation: "SUBSCRIPTION_CHANGE",
+          entity: "Subscription",
+          oldValue: "free",
+          newValue: "pro",
+          result: "SUCCESS",
+          duration,
+          severity: "INFO"
+        });
 
         console.log(`[Stripe Upgrade] Shop ${shopId} successfully upgraded to PRO. Invoice ${invoiceNum} generated.`);
+
+        verifySpan.end();
+        MetricsService.recordStripeRequest();
 
         return res.status(200).json({
           success: true,
@@ -948,9 +1355,16 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
         throw new ValidationError("Session has not been paid yet.");
       }
     } catch (err: any) {
+      verifySpan.setAttribute("error", true);
+      verifySpan.setAttribute("error.message", err.message);
+      verifySpan.end();
       next(err);
     }
-  });
+  };
+
+  // Route bindings for checkout session verification
+  app.get("/api/stripe/verify-session", authenticateFirebaseUser, validateRequest(verifySessionSchema), verifySessionHandler);
+  app.get("/api/verify-checkout", authenticateFirebaseUser, validateRequest(verifySessionSchema), verifySessionHandler);
 
   // Manual/Triggered Cleanup Endpoint
   app.post("/api/cron/cleanup", async (req, res, next) => {
@@ -1001,9 +1415,13 @@ Write all insights, summaries, and recommendations in ${isAr ? "Arabic" : "Engli
   // Global Error Handler for RFC 7807 problem details
   app.use(globalErrorHandler);
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Server] running on http://localhost:${PORT}`);
   });
+
+  // Graceful Shutdown Registration (Phase 6.9)
+  ShutdownManager.registerServer(server);
+  ShutdownManager.listen();
 }
 
 startServer();

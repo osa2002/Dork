@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { 
-  doc, 
-  onSnapshot, 
-  updateDoc, 
-  setDoc
-} from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { Shop, WorkingHoursDay } from "../types";
 import { useTranslation } from "react-i18next";
+import { useVendorStore } from "../store/vendor/vendorStore";
+import { vendorStorageService } from "../services/vendorStorageService";
 
 interface UseDashboardSettingsProps {
   shopId: string;
@@ -15,111 +9,81 @@ interface UseDashboardSettingsProps {
 
 export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
   const { t } = useTranslation();
-  const [shop, setShop] = useState<Shop | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Edit Shop Settings Form States
-  const [editShopName, setEditShopName] = useState("");
-  const [editShopLogoText, setEditShopLogoText] = useState("");
-  const [editShopCategory, setEditShopCategory] = useState("");
-  const [editShopLogoUrl, setEditShopLogoUrl] = useState("");
-  const [editShopTicketColor, setEditShopTicketColor] = useState("#4f46e5");
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  // Selected state from Zustand store
+  const shop = useVendorStore((state) => state.shop);
+  const loading = useVendorStore((state) => state.shopLoading);
+
+  const editShopName = useVendorStore((state) => state.editShopName);
+  const editShopLogoText = useVendorStore((state) => state.editShopLogoText);
+  const editShopCategory = useVendorStore((state) => state.editShopCategory);
+  const editShopLogoUrl = useVendorStore((state) => state.editShopLogoUrl);
+  const editShopTicketColor = useVendorStore((state) => state.editShopTicketColor);
+  const settingsSaving = useVendorStore((state) => state.settingsSaving);
+
+  const workingHoursEnabled = useVendorStore((state) => state.workingHoursEnabled);
+  const workingHoursDays = useVendorStore((state) => state.workingHoursDays);
+
+  const counterStatus = useVendorStore((state) => state.counterStatus);
+
+  // Selected actions from Zustand store
+  const subscribeToShop = useVendorStore((state) => state.subscribeToShop);
+  const setEditShopName = useVendorStore((state) => state.setEditShopName);
+  const setEditShopLogoText = useVendorStore((state) => state.setEditShopLogoText);
+  const setEditShopCategory = useVendorStore((state) => state.setEditShopCategory);
+  const setEditShopLogoUrl = useVendorStore((state) => state.setEditShopLogoUrl);
+  const setEditShopTicketColor = useVendorStore((state) => state.setEditShopTicketColor);
+  const setWorkingHoursEnabled = useVendorStore((state) => state.setWorkingHoursEnabled);
+  const setWorkingHoursDays = useVendorStore((state) => state.setWorkingHoursDays);
+
+  const activeCounterNumber = useVendorStore((state) => state.activeCounterNumber);
+  const setActiveCounterNumberStore = useVendorStore((state) => state.setActiveCounterNumber);
+
+  const setCounterStatusStore = useVendorStore((state) => state.setCounterStatus);
+  const updateCounterStatusStore = useVendorStore((state) => state.updateCounterStatus);
+  const handleSaveSettings = useVendorStore((state) => state.handleSaveSettings);
+
+  // Transient UI states
   const [dragActive, setDragActive] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Working Hours States
-  const [workingHoursEnabled, setWorkingHoursEnabled] = useState(false);
-  const [workingHoursDays, setWorkingHoursDays] = useState<{ [key: string]: WorkingHoursDay }>({
-    "0": { enabled: true, open: "09:00", close: "22:00" },
-    "1": { enabled: true, open: "09:00", close: "22:00" },
-    "2": { enabled: true, open: "09:00", close: "22:00" },
-    "3": { enabled: true, open: "09:00", close: "22:00" },
-    "4": { enabled: true, open: "09:00", close: "22:00" },
-    "5": { enabled: false, open: "09:00", close: "22:00" },
-    "6": { enabled: false, open: "09:00", close: "22:00" }
-  });
+  // Sync activeCounterNumber with storage on mount/change
+  useEffect(() => {
+    if (!shopId) return;
+    const stored = vendorStorageService.getItem(`dork_active_counter_${shopId}`) || "1";
+    setActiveCounterNumberStore(stored);
+  }, [shopId, setActiveCounterNumberStore]);
 
-  // Active Counter / Window States (with connection checks)
-  const [activeCounterNumber, setActiveCounterNumber] = useState<string>(() => {
-    return localStorage.getItem(`dork_active_counter_${shopId}`) || "1";
-  });
-  const [counterStatus, setCounterStatus] = useState<"online" | "busy" | "break" | "offline">("online");
+  const setActiveCounterNumber = (val: string) => {
+    setActiveCounterNumberStore(val);
+    vendorStorageService.setItem(`dork_active_counter_${shopId}`, val);
+  };
 
   // Real-time listener for Shop
   useEffect(() => {
     if (!shopId) return;
-
-    const shopDocRef = doc(db, "shops", shopId);
-    const unsubShop = onSnapshot(shopDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as Shop;
-        setShop(data);
-        setEditShopName(data.name);
-        setEditShopLogoText(data.logoText || "");
-
-        const rawCat = data.category ? String(data.category).toLowerCase() : "";
-        if (rawCat.includes("barber") || rawCat.includes("salon") || rawCat.includes("حلاق") || rawCat.includes("تجميل")) {
-          setEditShopCategory("barber");
-        } else if (rawCat.includes("medical") || rawCat.includes("clinic") || rawCat.includes("عيادة") || rawCat.includes("طبي")) {
-          setEditShopCategory("medical");
-        } else if (rawCat.includes("government") || rawCat.includes("office") || rawCat.includes("حكومي") || rawCat.includes("مكتب")) {
-          setEditShopCategory("government");
-        } else if (rawCat.includes("telecom") || rawCat.includes("retail") || rawCat.includes("اتصالات") || rawCat.includes("تجزئة")) {
-          setEditShopCategory("telecom");
-        } else if (rawCat.includes("restaurant") || rawCat.includes("cafe") || rawCat.includes("café") || rawCat.includes("مطعم") || rawCat.includes("مقهى")) {
-          setEditShopCategory("food");
-        } else {
-          setEditShopCategory("other");
-        }
-
-        setEditShopLogoUrl(data.logoUrl || "");
-        setEditShopTicketColor(data.ticketColor || "#4f46e5");
-        if (data.workingHours) {
-          setWorkingHoursEnabled(data.workingHours.enabled);
-          if (data.workingHours.days) {
-            setWorkingHoursDays(data.workingHours.days);
-          }
-        }
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error("Error listening to shop:", error);
-      handleFirestoreError(error, OperationType.GET, `shops/${shopId}`);
-    });
-
+    const unsubShop = subscribeToShop(shopId);
     return () => unsubShop();
-  }, [shopId]);
+  }, [shopId, subscribeToShop]);
 
   // Set Counter online status on mount
   useEffect(() => {
     if (!shopId || !activeCounterNumber) return;
     const updateStatusOnMount = async () => {
       try {
-        const docId = `${shopId}_${activeCounterNumber}`;
-        await setDoc(doc(db, "counter_statuses", docId), {
-          shopId,
-          counterNumber: activeCounterNumber,
-          status: "online",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        setCounterStatus("online");
+        await updateCounterStatusStore(shopId, activeCounterNumber, "online");
+        setCounterStatusStore("online");
       } catch (err) {
         console.error("Error setting initial counter status:", err);
       }
     };
     updateStatusOnMount();
-  }, [shopId, activeCounterNumber]);
+  }, [shopId, activeCounterNumber, updateCounterStatusStore, setCounterStatusStore]);
 
   const updateCounterStatus = async (newStatus: "online" | "busy" | "break" | "offline") => {
-    setCounterStatus(newStatus);
+    setCounterStatusStore(newStatus);
     try {
-      const docId = `${shopId}_${activeCounterNumber}`;
-      await setDoc(doc(db, "counter_statuses", docId), {
-        shopId,
-        counterNumber: activeCounterNumber,
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      await updateCounterStatusStore(shopId, activeCounterNumber, newStatus);
     } catch (err) {
       console.error("Error updating counter status:", err);
     }
@@ -127,29 +91,11 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
 
   const handleUpdateSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editShopName.trim()) return;
-
-    setSettingsSaving(true);
     try {
-      const shopDocRef = doc(db, "shops", shopId);
-      await updateDoc(shopDocRef, {
-        name: editShopName.trim(),
-        logoText: editShopLogoText.trim(),
-        category: editShopCategory,
-        logoUrl: editShopLogoUrl.trim(),
-        ticketColor: editShopTicketColor,
-        workingHours: {
-          enabled: workingHoursEnabled,
-          days: workingHoursDays
-        }
-      });
+      await handleSaveSettings(shopId);
       alert(t("vend_settings_saved_success", { defaultValue: "Shop settings saved successfully!" }));
-    } catch (err) {
-      console.error("Error updating settings:", err);
+    } catch (err: any) {
       alert(t("vend_err_saving_settings", { defaultValue: "An error occurred while saving settings." }));
-      handleFirestoreError(err, OperationType.UPDATE, `shops/${shopId}`);
-    } finally {
-      setSettingsSaving(false);
     }
   };
 
@@ -199,8 +145,6 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
     }
   };
 
-  const [copied, setCopied] = useState(false);
-
   const handleCopyLink = () => {
     if (!shop?.slug) return;
     const url = `${window.location.origin}/portal/${shop.slug}`;
@@ -245,10 +189,7 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
     workingHoursDays,
     setWorkingHoursDays,
     activeCounterNumber,
-    setActiveCounterNumber: (val: string) => {
-      setActiveCounterNumber(val);
-      localStorage.setItem(`dork_active_counter_${shopId}`, val);
-    },
+    setActiveCounterNumber,
     counterStatus,
     updateCounterStatus,
     handleUpdateSettings,

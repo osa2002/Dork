@@ -2169,7 +2169,7 @@ i18n
 // Handle text direction and language changes
 i18n.on("languageChanged", (lng) => {
   localStorage.setItem("dorkq_lang", lng);
-  const dir = lng === "ar" ? "rtl" : "ltr";
+  const dir = (lng || "ar").startsWith("ar") ? "rtl" : "ltr";
   document.documentElement.dir = dir;
   document.documentElement.lang = lng;
   // Apply direction to the body element too for consistency
@@ -2186,7 +2186,7 @@ i18n.on("languageChanged", (lng) => {
 
 // Initialize on load
 const currentLng = i18n.language || "ar";
-const initialDir = currentLng === "ar" ? "rtl" : "ltr";
+const initialDir = currentLng.startsWith("ar") ? "rtl" : "ltr";
 document.documentElement.dir = initialDir;
 document.documentElement.lang = currentLng;
 document.body.dir = initialDir;
