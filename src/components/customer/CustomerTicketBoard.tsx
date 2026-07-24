@@ -1,12 +1,14 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { 
   Ticket as TicketIcon, Bell, Volume2, VolumeX, CheckCircle, Star, Users, Clock, Sparkles, 
   Battery, Wrench, AlertTriangle, AlertCircle, XCircle, Copy, Check, Share2, Calendar, Smile, Loader2,
-  Smartphone, Download
+  Smartphone, Download, Printer
 } from "lucide-react";
 import { Shop, Ticket } from "../../types";
+import { getAppOrigin } from "../../lib/originUtils";
 
 interface CustomerTicketBoardProps {
   shop: Shop;
@@ -130,14 +132,15 @@ export function CustomerTicketBoard({
   const { t } = useTranslation();
 
   return (
-    <motion.div 
-      key="ticket-board"
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
-      className="space-y-4"
-    >
+    <>
+      <motion.div 
+        key="ticket-board"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -15 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="space-y-4"
+      >
       {/* Real boarding pass card layout */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-xl overflow-hidden relative ticket-notch">
         
@@ -735,7 +738,7 @@ export function CustomerTicketBoard({
           <div className="pt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-col items-center justify-center">
             <div className="text-xs font-bold text-slate-400 mb-2">{t("ticket_link_label")}</div>
             <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 px-4 py-2 rounded-xl text-[10px] text-indigo-600 dark:text-indigo-400 font-bold dir-ltr block truncate max-w-full">
-              {window.location.origin}/?shop={shop.slug}&ticketId={myTicket.id}
+              {getAppOrigin()}/?shop={shop.slug}&ticketId={myTicket.id}
             </div>
             
             {/* Share and Copy Action Buttons */}
@@ -767,6 +770,19 @@ export function CustomerTicketBoard({
               >
                 <Share2 className="w-3.5 h-3.5 shrink-0" />
                 <span>{t("customer_share_link_btn")}</span>
+              </button>
+            </div>
+
+            {/* Print Ticket Button */}
+            <div className="w-full max-w-xs mt-2 no-print">
+              <button
+                id="btn-print-ticket"
+                type="button"
+                onClick={() => window.print()}
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 font-black text-xs py-2.5 px-3 rounded-xl transition-all active:scale-98 cursor-pointer shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5 shrink-0" />
+                <span>{t("customer_print_ticket_btn", isRtl ? "طباعة تذكرة حرارية" : "Print Thermal Ticket")}</span>
               </button>
             </div>
 
@@ -1295,5 +1311,87 @@ export function CustomerTicketBoard({
         </div>
       )}
     </motion.div>
+      {createPortal(
+        <div className="thermal-receipt" dir={isRtl ? "rtl" : "ltr"}>
+          <div className="receipt-header">
+            <h2 className="receipt-shop-name">*** {shop.name} ***</h2>
+            {shop.logoText && <p className="receipt-shop-sub">{shop.logoText}</p>}
+            <p className="receipt-time">
+              {new Date(myTicket.createdAt?.seconds ? myTicket.createdAt.seconds * 1000 : Date.now()).toLocaleString(
+                isRtl ? "ar-EG" : "en-US",
+                { dateStyle: "short", timeStyle: "short" }
+              )}
+            </p>
+          </div>
+
+          <div className="receipt-divider">--------------------------------</div>
+
+          <div className="receipt-ticket-info">
+            <span className="receipt-label">{t("ticket_number_label", isRtl ? "رقم التذكرة" : "Ticket Number")}</span>
+            <h1 className="receipt-number">#{String(myTicket.ticketNumber).padStart(2, "0")}</h1>
+            {myTicket.isPriority && (
+              <div className="receipt-priority">
+                ** {t("customer_priority_badge", isRtl ? "هام جداً / أولوية" : "VIP / PRIORITY")} **
+              </div>
+            )}
+          </div>
+
+          <div className="receipt-divider">--------------------------------</div>
+
+          <div className="receipt-details">
+            <div className="receipt-row">
+              <span className="receipt-row-label">{t("customer_field_name", isRtl ? "الاسم" : "Name")}:</span>
+              <span className="receipt-row-value">{myTicket.customerName}</span>
+            </div>
+            {myTicket.serviceName && (
+              <div className="receipt-row">
+                <span className="receipt-row-label">{t("service_label", isRtl ? "الخدمة" : "Service")}:</span>
+                <span className="receipt-row-value">{myTicket.serviceName}</span>
+              </div>
+            )}
+            {myTicket.status === "waiting" && (
+              <>
+                <div className="receipt-row">
+                  <span className="receipt-row-label">{t("customer_waitlist_ahead", isRtl ? "الأشخاص أمامك" : "People Ahead")}:</span>
+                  <span className="receipt-row-value">{peopleInFront}</span>
+                </div>
+                <div className="receipt-row">
+                  <span className="receipt-row-label">{t("customer_est_wait", isRtl ? "الانتظار المتوقع" : "Est. Wait")}:</span>
+                  <span className="receipt-row-value">{estimatedWaitMinutes} {t("time_minutes", isRtl ? "دقيقة" : "mins")}</span>
+                </div>
+              </>
+            )}
+            {myTicket.counterNumber && (
+              <div className="receipt-row">
+                <span className="receipt-row-label">{t("counter_label", isRtl ? "شباك الخدمة" : "Counter")}:</span>
+                <span className="receipt-row-value">#{myTicket.counterNumber}</span>
+              </div>
+            )}
+            <div className="receipt-row">
+              <span className="receipt-row-label">{t("ticket_status_label", isRtl ? "الحالة" : "Status")}:</span>
+              <span className="receipt-row-value">
+                {myTicket.status === "waiting" && (isRtl ? "في الانتظار" : "Waiting")}
+                {myTicket.status === "calling" && (isRtl ? "جاري المناداة" : "Calling")}
+                {myTicket.status === "completed" && (isRtl ? "مكتمل" : "Completed")}
+                {myTicket.status === "cancelled" && (isRtl ? "ملغي" : "Cancelled")}
+                {myTicket.status === "no_show" && (isRtl ? "لم يحضر" : "No Show")}
+              </span>
+            </div>
+          </div>
+
+          <div className="receipt-divider">--------------------------------</div>
+
+          <div className="receipt-footer">
+            <p className="receipt-greeting">
+              {isRtl ? "شكراً لصبرك ومساعدتنا في خدمتك بشكل أفضل!" : "Thank you for your patience and cooperation!"}
+            </p>
+            <p className="receipt-url">
+              {getAppOrigin()}/?shop={shop.slug}
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }

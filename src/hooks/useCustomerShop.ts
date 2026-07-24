@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
-import { db } from "../lib/firebase";
 import { Shop, Service } from "../types";
 import { useShallow } from "zustand/react/shallow";
 import { useShopStore } from "../store";
+import { shopRepository } from "../repositories/shopRepository";
 
 export function useCustomerShop(shopSlug: string) {
   const {
@@ -38,22 +37,9 @@ export function useCustomerShop(shopSlug: string) {
     let isMounted = true;
     const fetchHistoricalAvg = async () => {
       try {
-        const q = query(
-          collection(db, "tickets"),
-          where("shopId", "==", shop.id),
-          where("status", "==", "completed"),
-          limit(50)
-        );
-        const snap = await getDocs(q);
-        const completedTickets = snap.docs
-          .map(d => d.data())
-          .filter((t: any) => t.completedAt && t.calledAt);
-        if (completedTickets.length > 0 && isMounted) {
-          const totalMin = completedTickets.reduce((acc, t: any) => {
-            const diff = (new Date(t.completedAt).getTime() - new Date(t.calledAt).getTime()) / 60000;
-            return acc + Math.max(1, diff);
-          }, 0);
-          setHistoricalAvgDuration(Math.round(totalMin / completedTickets.length));
+        const avg = await shopRepository.getHistoricalAvgDuration(shop.id);
+        if (avg !== null && isMounted) {
+          setHistoricalAvgDuration(avg);
         }
       } catch (err) {
         console.warn("Could not load historical avg duration:", err);

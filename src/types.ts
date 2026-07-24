@@ -106,3 +106,79 @@ export interface Invoice {
   createdAt: any;
 }
 
+export type WebhookEvent = 
+  | "ticket.created" 
+  | "ticket.calling" 
+  | "ticket.completed" 
+  | "ticket.cancelled" 
+  | "ticket.no_show" 
+  | "queue.paused" 
+  | "queue.resumed";
+
+export interface WebhookHeader {
+  key: string;
+  value: string;
+}
+
+export interface WebhookConfig {
+  id: string;
+  shopId: string;
+  name: string;
+  url: string;
+  secret?: string;
+  events: WebhookEvent[];
+  isActive: boolean;
+  headers?: WebhookHeader[];
+  createdAt: any;
+  updatedAt?: any;
+}
+
+export interface WebhookLog {
+  id: string;
+  webhookId: string;
+  webhookName?: string;
+  shopId: string;
+  event: WebhookEvent;
+  url: string;
+  statusCode: number;
+  success: boolean;
+  responseSummary?: string;
+  payload: any;
+  durationMs: number;
+  createdAt: any;
+}
+
+export type OutboxStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "DISPATCHED"
+  | "FAILED"
+  | "ABANDONED"
+  | "DEAD_LETTER";
+
+export interface OutboxRecord {
+  id: string;
+  topic?: string;
+  eventType?: string;
+  event?: string;
+  payload: any;
+  status: OutboxStatus;
+  retryCount?: number;
+  maxRetries?: number;
+  nextAttemptAt?: string;
+  lastAttemptAt?: string;
+  processedAt?: string;
+  lastError?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt?: string;
+  partitionKey?: string;
+  targetUrl?: string;
+  correlationId?: string;
+  idempotencyKey?: string;
+  shopId?: string;
+  tenantId?: string;
+  leaseId?: string;
+  leaseExpiresAt?: string;
+}
+

@@ -5,21 +5,37 @@ import { getMessaging, isSupported } from "firebase/messaging";
 import { getAnalytics, logEvent, isSupported as isAnalyticsSupported } from "firebase/analytics";
 import config from "../../firebase-applet-config.json";
 
+const env = (import.meta as any).env || {};
+
 const firebaseConfig = {
-  apiKey: config.apiKey,
-  authDomain: config.authDomain,
-  projectId: config.projectId,
-  storageBucket: config.storageBucket,
-  messagingSenderId: config.messagingSenderId,
-  appId: config.appId
+  apiKey: env.VITE_FIREBASE_API_KEY || config?.apiKey || "",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || config?.authDomain || "",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || config?.projectId || "",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || config?.storageBucket || "",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || config?.messagingSenderId || "",
+  appId: env.VITE_FIREBASE_APP_ID || config?.appId || ""
 };
+
+const firestoreDatabaseId = env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || config?.firestoreDatabaseId;
+
+console.log("[Firebase Initialization] Validating Firebase configuration...", {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  firestoreDatabaseId: firestoreDatabaseId || "(default)",
+  hasAppId: !!firebaseConfig.appId,
+});
+
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error("[Firebase Initialization Error] Missing required Firebase configuration fields (apiKey or projectId). Check firebase-applet-config.json or environment variables.");
+}
 
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with custom databaseId and long polling to bypass iframe/proxy connection blocks
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, config.firestoreDatabaseId);
+}, firestoreDatabaseId);
 
 // Enable IndexedDB offline persistence for high reliability in offline/poor-network scenarios
 if (typeof window !== "undefined") {

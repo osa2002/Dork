@@ -32,7 +32,7 @@ export default function LanguageSwitcher() {
   const currentLanguageObj = languages.find(l => l.code === currentLang) || languages[0];
 
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef}>
+    <div className="relative inline-block text-start shrink-0" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="inline-flex items-center gap-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm outline-none"

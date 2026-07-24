@@ -2,6 +2,7 @@ import React from "react";
 import { Monitor, Plus, Loader2, Edit2, Check, RefreshCw, Trash2, ArrowUpRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Display } from "../../types";
+import { getAppOrigin } from "../../lib/originUtils";
 
 interface DisplaysTabProps {
   displays: Display[];
@@ -61,7 +62,7 @@ export function DisplaysTab({
             {displays.map((display) => {
               const isEditing = editingDisplayId === display.id;
               const isRefreshing = refreshingDisplayId === display.id;
-              const displayUrl = `${window.location.origin}/display/${display.id}`;
+              const displayUrl = `${getAppOrigin()}/display/${display.id}`;
 
               return (
                 <div 

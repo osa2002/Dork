@@ -181,6 +181,8 @@ export interface VendorAnalyticsState {
   aiAnalysis: string;
   aiLoading: boolean;
   aiError: string | null;
+  historicalTickets: Ticket[];
+  historicalLoading: boolean;
 }
 
 export interface VendorAnalyticsActions {
@@ -194,6 +196,7 @@ export interface VendorAnalyticsActions {
   setAiError: (error: string | null) => void;
   handleRequestAiDiagnostics: (allTickets: Ticket[]) => Promise<void>;
   handleExportCSV: (filteredReportTickets: Ticket[], t: any) => Promise<void>;
+  fetchHistoricalTickets: (shopId: string, startDateStr: string, endDateStr: string) => Promise<void>;
 }
 
 export type VendorAnalyticsSlice = VendorAnalyticsState & VendorAnalyticsActions;

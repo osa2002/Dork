@@ -1,0 +1,71 @@
+name: 🔄 Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - '.env.example'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - '.env.example'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-test:
+    name: 🔄 Build and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔍 Linter Checks
+        run: npm run lint
+
+      - name: 🧪 Execute Vitest Test Suites
+        run: npm run test
+
+      - name: 📊 Code Coverage Check
+        run: npm run test:coverage
+
+      - name: 🏗️ Compile Production Build
+        run: npm run build
+
+      - name: 🔒 Validate Build Output
+        run: |
+          # Verify bundle output exists
+          if [ ! -d "dist" ] || [ ! -f "dist/server.cjs" ]; then
+            echo "❌ Production build artifacts are incomplete!"
+            exit 1
+          fi
+          echo "✅ Production bundle is successfully compiled and validated."
+
+      - name: 📦 Pack Immutable Build Artifacts
+        run: |
+          tar -czf build-artifact.tar.gz dist/ package.json server.ts
+
+      - name: 📤 Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: immutable-build-artifacts
+          path: build-artifact.tar.gz
+          retention-days: 7

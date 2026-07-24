@@ -1,0 +1,73 @@
+name: 🔄 Rollback Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "Version to rollback to (e.g., 0.9.9)"
+        required: true
+        default: "0.9.9"
+      reason:
+        description: "Reason for initiating rollback"
+        required: false
+        default: "SLA Overall Health score dropped below 90%"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  rollback:
+    name: 🔄 Execute Platform Rollback
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🟢 Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔄 Pull Rollback Target & Artifacts
+        run: |
+          echo "🔄 Initiating rollback to version: v${{ github.event.inputs.target_version }}"
+          echo "🔄 Reason: ${{ github.event.inputs.reason }}"
+          
+          # Simulate fetching compiled bundle or rollback container image tag from artifact store
+          # If a specific git tag exists for that version, we checkout that tag's files
+          if git rev-parse "v${{ github.event.inputs.target_version }}" >/dev/null 2>&1; then
+            echo "   ✅ Git tag found! Checking out v${{ github.event.inputs.target_version }}..."
+            git checkout "v${{ github.event.inputs.target_version }}"
+          else
+            echo "   ⚠️ Git tag v${{ github.event.inputs.target_version }} not found in local history. Reverting to previous commit."
+            git checkout HEAD^
+          fi
+
+      - name: 🏗️ Rebuild Rollback Target
+        run: |
+          echo "🏗️ Rebuilding previous version..."
+          npm run build
+
+      - name: 🧪 Rollback Validation Suite
+        run: |
+          echo "🧪 Running full test suite to validate rollback safety..."
+          npm run test
+
+      - name: 🧬 Post-Rollback SRE Health Verification
+        run: |
+          echo "🧬 Verifying rolled back platform health score..."
+          # Running our release gate check utility to verify post-rollback health scores
+          npx tsx server/chaos/platform-kernel/release-gate-check.ts
+
+      - name: 📢 Announce Rollback Success
+        run: |
+          echo "🎉 Rollback completed successfully!"
+          echo "🎉 Platform health has been restored to compliant SLA parameters (>90%)."

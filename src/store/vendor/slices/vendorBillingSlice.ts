@@ -3,6 +3,7 @@ import { VendorState, VendorBillingSlice } from "../types";
 import { handleFirestoreError, OperationType } from "../../../lib/firebase";
 import { vendorBillingRepository } from "../../../repositories/vendorBillingRepository";
 import { runStoreAction } from "../utils/storeActionHelper";
+import { getAppOrigin } from "../../../lib/originUtils";
 
 let invoicesUnsubscribe: (() => void) | null = null;
 
@@ -74,8 +75,8 @@ export const createVendorBillingSlice: StateCreator<
         const result = await vendorBillingRepository.createCheckoutSession({
           shopId,
           plan: planType,
-          successUrl: `${window.location.origin}/vendor?checkout_success=true&session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/vendor?checkout_cancel=true`,
+          successUrl: `${getAppOrigin()}/vendor?checkout_success=true&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${getAppOrigin()}/vendor?checkout_cancel=true`,
         });
 
         if (result.url) {

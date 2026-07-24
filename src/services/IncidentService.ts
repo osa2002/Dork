@@ -1,4 +1,5 @@
 import { RetentionPolicyService } from "./RetentionPolicyService";
+import { EnterpriseEventBus } from "../../server/chaos/governance/EnterpriseEventBus";
 
 export interface TimelineEvent {
   timestamp: string;
@@ -50,6 +51,14 @@ export class IncidentService {
 
     this.incidents.push(incident);
     this.prune();
+
+    EnterpriseEventBus.publish("IncidentCreated", {
+      incidentId: incident.id,
+      title: incident.title,
+      severity: incident.severity,
+      affectedServices: incident.affectedServices,
+    });
+
     return incident;
   }
 

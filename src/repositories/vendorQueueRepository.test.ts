@@ -19,11 +19,12 @@ describe("Vendor Queue Repository", () => {
     const onUpdate = vi.fn();
     const onError = vi.fn();
 
-    const unsub = vendorQueueRepository.subscribeToTickets("shop-123", onUpdate, onError);
+    const unsub = vendorQueueRepository.subscribeToTickets("shop-123", "Asia/Riyadh", onUpdate, onError);
 
     expect(collection).toHaveBeenCalledWith(expect.any(Object), "tickets");
     expect(where).toHaveBeenCalledWith("shopId", "==", "shop-123");
-    expect(query).toHaveBeenCalledWith(mockCollection, mockWhere);
+    expect(where).toHaveBeenCalledWith("createdAt", ">=", expect.any(String));
+    expect(query).toHaveBeenCalledWith(mockCollection, mockWhere, mockWhere);
     expect(onSnapshot).toHaveBeenCalledWith(mockQuery, expect.any(Function), onError);
     expect(unsub).toBeDefined();
   });

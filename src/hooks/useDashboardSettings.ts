@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useVendorStore } from "../store/vendor/vendorStore";
 import { vendorStorageService } from "../services/vendorStorageService";
+import { getAppOrigin } from "../lib/originUtils";
 
 interface UseDashboardSettingsProps {
   shopId: string;
@@ -147,7 +148,7 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
 
   const handleCopyLink = () => {
     if (!shop?.slug) return;
-    const url = `${window.location.origin}/portal/${shop.slug}`;
+    const url = `${getAppOrigin()}/portal/${encodeURIComponent(shop.slug)}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -160,12 +161,40 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
     if (!shop?.slug) return;
     const qrImg = document.querySelector("#qr-code-element img") as HTMLImageElement;
     if (!qrImg) return;
-    const link = document.createElement("a");
-    link.href = qrImg.src;
-    link.download = `customer_portal_qr_${shop.slug}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    // If it's already a local base64/data URI, download it instantly without fetching
+    if (qrImg.src.startsWith("data:")) {
+      const link = document.createElement("a");
+      link.href = qrImg.src;
+      link.download = `customer_portal_qr_${shop.slug}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+    
+    fetch(qrImg.src)
+      .then(response => response.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `customer_portal_qr_${shop.slug}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(err => {
+        console.error("Failed to download QR code via fetch:", err);
+        const link = document.createElement("a");
+        link.href = qrImg.src;
+        link.target = "_blank";
+        link.download = `customer_portal_qr_${shop.slug}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
   };
 
   return {

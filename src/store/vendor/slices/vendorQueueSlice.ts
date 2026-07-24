@@ -57,6 +57,7 @@ export const createVendorQueueSlice: StateCreator<
 
     ticketsUnsubscribe = vendorQueueRepository.subscribeToTickets(
       shopId,
+      timezone,
       (ticketsList, changes) => {
         const startOfToday = getClientStartOfTodayInTimezone(timezone);
         const startOfTodayISO = startOfToday.toISOString();
@@ -146,29 +147,26 @@ export const createVendorQueueSlice: StateCreator<
 
   callNextTicket: async (selectedQueueServiceId, activeCounterNumber, announceCallingTicket, t) => {
     set({ callProgress: "calling_next" });
-    const { tickets } = get();
+    const { tickets, shop } = get();
     const currentCalling = tickets.find(
       tItem => tItem.status === "calling" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
     );
-    if (currentCalling) {
-      try {
-        await vendorQueueRepository.updateTicket(currentCalling.id, { status: "completed", completedAt: new Date().toISOString() });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `tickets/${currentCalling.id}`);
-      }
-    }
-
     const nextWaiting = tickets.find(
       tItem => tItem.status === "waiting" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
     );
+
     if (nextWaiting) {
       try {
-        await vendorQueueRepository.updateTicket(nextWaiting.id, { 
-          status: "calling", 
-          calledAt: new Date().toISOString(),
-          counterNumber: activeCounterNumber
+        const result = await vendorQueueRepository.callNextTicketAtomically({
+          shopId: shop?.id || nextWaiting.shopId,
+          selectedServiceId: selectedQueueServiceId,
+          activeCounterNumber,
+          currentCallingTicketId: currentCalling?.id,
+          nextWaitingTicketId: nextWaiting.id
         });
-        announceCallingTicket(String(nextWaiting.ticketNumber), activeCounterNumber, nextWaiting.serviceName);
+        if (result.success) {
+          announceCallingTicket(String(nextWaiting.ticketNumber), activeCounterNumber, nextWaiting.serviceName);
+        }
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `tickets/${nextWaiting.id}`);
       }
@@ -182,21 +180,16 @@ export const createVendorQueueSlice: StateCreator<
     set({ callProgress: `calling_${ticket.id}` });
     const { tickets } = get();
     const currentCalling = tickets.find(tItem => tItem.status === "calling" && tItem.id !== ticket.id);
-    if (currentCalling) {
-      try {
-        await vendorQueueRepository.updateTicket(currentCalling.id, { status: "completed", completedAt: new Date().toISOString() });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `tickets/${currentCalling.id}`);
-      }
-    }
 
     try {
-      await vendorQueueRepository.updateTicket(ticket.id, { 
-        status: "calling", 
-        calledAt: new Date().toISOString(),
-        counterNumber: activeCounterNumber
+      const result = await vendorQueueRepository.callTicketAtomically({
+        ticketId: ticket.id,
+        activeCounterNumber,
+        currentCallingTicketId: currentCalling?.id
       });
-      announceCallingTicket(String(ticket.ticketNumber), activeCounterNumber, ticket.serviceName);
+      if (result.success) {
+        announceCallingTicket(String(ticket.ticketNumber), activeCounterNumber, ticket.serviceName);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `ticket/${ticket.id}`);
     }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { 
@@ -17,10 +17,34 @@ import {
   Smartphone,
   Printer,
   HelpCircle,
-  Download
+  Download,
+  Loader2
 } from "lucide-react";
 import { PlanItem, FAQItem } from "../types";
 import LanguageSwitcher from "./LanguageSwitcher";
+
+const QrScannerModal = lazy(() => import("./customer/QrScannerModal"));
+
+const QrScannerFallback = ({ isOpen, onClose, isRtl, t }: { isOpen: boolean; onClose: () => void; isRtl: boolean; t: any }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity duration-200"
+      />
+
+      {/* Modal Box */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative z-10 flex flex-col max-h-[90vh] p-8 items-center justify-center text-center">
+        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
+          {t("loading", { defaultValue: isRtl ? "جاري تحميل قارئ الرموز..." : "Loading QR Scanner..." })}
+        </h3>
+      </div>
+    </div>
+  );
+};
 
 interface LandingPageProps {
   onStart: () => void;
@@ -28,15 +52,17 @@ interface LandingPageProps {
   userLoggedIn: boolean;
   isDarkMode: boolean;
   setIsDarkMode: (val: boolean) => void;
+  onJoinShop: (slug: string) => void;
 }
 
-export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, isDarkMode, setIsDarkMode }: LandingPageProps) {
+export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, isDarkMode, setIsDarkMode, onJoinShop }: LandingPageProps) {
   const { t, i18n } = useTranslation();
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
   const [howItWorksTab, setHowItWorksTab] = useState<"merchant" | "customer">("merchant");
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
 
   React.useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -179,6 +205,15 @@ export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, is
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
 
+            {/* Built-in QR Scanner Header Action */}
+            <button
+              onClick={() => setIsQrScannerOpen(true)}
+              className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all flex items-center justify-center cursor-pointer shadow-sm hover:scale-105"
+              title={isRtl ? "مسح رمز QR للمحل" : "Scan Shop QR Code"}
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
+
             {/* Dark Mode Toggle Button */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -282,6 +317,13 @@ export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, is
                 >
                   <span>{t("hero_cta_create")}</span>
                   <ArrowRight className={`w-5 h-5 ${isRtl ? "rotate-180" : ""}`} />
+                </button>
+                <button 
+                  onClick={() => setIsQrScannerOpen(true)}
+                  className="bg-emerald-600 text-white text-base font-black px-8 py-4 rounded-2xl hover:bg-emerald-700 active:scale-98 hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-lg shadow-emerald-200 dark:shadow-none font-sans"
+                >
+                  <QrCode className="w-5 h-5 shrink-0" />
+                  <span>{isRtl ? "مسح كود المحل للانضمام" : "Scan QR to Join Queue"}</span>
                 </button>
                 <button 
                   onClick={() => setIsHowItWorksOpen(true)}
@@ -681,6 +723,20 @@ export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, is
             </div>
           </div>
         </div>
+      )}
+
+      {/* Built-in QR Scanner Modal */}
+      {isQrScannerOpen && (
+        <Suspense fallback={<QrScannerFallback isOpen={isQrScannerOpen} onClose={() => setIsQrScannerOpen(false)} isRtl={isRtl} t={t} />}>
+          <QrScannerModal
+            isOpen={isQrScannerOpen}
+            onClose={() => setIsQrScannerOpen(false)}
+            onScanSuccess={(slug) => {
+              setIsQrScannerOpen(false);
+              onJoinShop(slug);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

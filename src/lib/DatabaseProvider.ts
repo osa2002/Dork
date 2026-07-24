@@ -205,7 +205,16 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
   async archiveAndDeleteTickets(tickets: { id: string; data: any }[]): Promise<void> {
     const span = TelemetryService.startSpan("firestore:archiveAndDeleteTickets");
     span.setAttribute("ticketsCount", tickets.length);
+    const SERVER_SECRET = process.env.STRIPE_VERIFICATION_TOKEN || "DORK_SERVER_SECRET_987654321_PRO_TOKEN";
+    const verificationDocRef = clientDoc(this.clientDb, "shops", "server_cleanup", "private", "verification");
+
     try {
+      // 1. Create temporary cleanup verification document
+      await clientSetDoc(verificationDocRef, {
+        serverSecret: SERVER_SECRET,
+        createdAt: new Date().toISOString()
+      });
+
       let batch = clientWriteBatch(this.clientDb);
       let operationsInBatch = 0;
 
@@ -238,6 +247,13 @@ export class ClientDatabaseProvider implements IDatabaseProvider {
       span.setAttribute("error.message", err.message);
       span.end();
       throw err;
+    } finally {
+      // 2. Cleanup the temporary verification document
+      try {
+        await clientDeleteDoc(verificationDocRef);
+      } catch (e) {
+        console.warn("[DatabaseProvider] Failed to delete server_cleanup token:", e);
+      }
     }
   }
 

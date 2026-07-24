@@ -11,7 +11,7 @@ export interface UiState {
   showInstallBanner: boolean;
   deferredPrompt: any;
   isStandalone: boolean;
-  activeDashboardTab: "queue" | "services" | "qr" | "reports" | "displays" | "billing";
+  activeDashboardTab: "queue" | "services" | "qr" | "reports" | "displays" | "billing" | "webhooks";
   confirmModal: {
     title: string;
     message: string;
@@ -29,7 +29,7 @@ export interface UiState {
   setShowInstallBanner: (show: boolean) => void;
   setDeferredPrompt: (prompt: any) => void;
   setIsStandalone: (standalone: boolean) => void;
-  setActiveDashboardTab: (tab: "queue" | "services" | "qr" | "reports" | "displays" | "billing") => void;
+  setActiveDashboardTab: (tab: "queue" | "services" | "qr" | "reports" | "displays" | "billing" | "webhooks") => void;
   setConfirmModal: (modal: { title: string; message: string; onConfirm: () => void } | null) => void;
   resetUiStore: () => void;
 }

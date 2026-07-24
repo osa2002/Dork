@@ -1,4 +1,5 @@
 import os from "os";
+import { EnterpriseEventBus } from "../../server/chaos/governance/EnterpriseEventBus";
 
 export interface SystemMetrics {
   memory: {
@@ -80,6 +81,12 @@ export class MetricsService {
     if (!success) {
       this.apiErrors++;
     }
+
+    EnterpriseEventBus.publish("MetricsUpdated", {
+      requestsCount: this.apiRequests,
+      latencyMs: latencyMs,
+      errorRatePercent: this.apiRequests > 0 ? (this.apiErrors / this.apiRequests) * 100 : 0,
+    });
   }
 
   /**

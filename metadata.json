@@ -1,7 +1,9 @@
 {
   "name": "Remix: Dork - Digital Queue",
-  "description": "نظام ذكي لإدارة طوابير الانتظار الرقمية للمحلات الخدمية عبر الـ QR Code مع مزامنة لحظية ودعم كامل للغة العربية والـ RTL.",
-  "requestFramePermissions": [],
+  "description": "نظام ذكي لإدارة طوابير الانتظار الرقمية للمحلات الخدمية عبر الـ QR Code مع مزامنة لحظية ودعم كامل للغة العربية والـ RTL، مدعم بـ SRE Chaos Engineering وبوابات CI/CD للمؤسسات الكبرى.",
+  "requestFramePermissions": [
+    "camera"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

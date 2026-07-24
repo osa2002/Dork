@@ -1,6 +1,7 @@
 import { StateCreator } from "zustand";
 import { VendorState, VendorAnalyticsSlice } from "../types";
 import { vendorAnalyticsRepository } from "../../../repositories/vendorAnalyticsRepository";
+import { vendorQueueRepository } from "../../../repositories/vendorQueueRepository";
 import { calculateAnalyticsOverview } from "../utils/analyticsCalculations";
 import { Ticket } from "../../../types";
 
@@ -28,6 +29,8 @@ export const createVendorAnalyticsSlice: StateCreator<
   aiAnalysis: "",
   aiLoading: false,
   aiError: null,
+  historicalTickets: [],
+  historicalLoading: false,
 
   setTimeRange: (timeRange) => set({ timeRange }),
   setReportStartDate: (reportStartDate) => set({ reportStartDate }),
@@ -150,6 +153,19 @@ export const createVendorAnalyticsSlice: StateCreator<
       set({ aiError: err.message || "AI Advisor failed to generate diagnosis." });
     } finally {
       set({ aiLoading: false });
+    }
+  },
+
+  fetchHistoricalTickets: async (shopId: string, startDateStr: string, endDateStr: string) => {
+    set({ historicalLoading: true, reportError: null });
+    try {
+      const startDate = new Date(`${startDateStr}T00:00:00`);
+      const endDate = new Date(`${endDateStr}T23:59:59.999`);
+      const tickets = await vendorQueueRepository.getTicketsByDateRange(shopId, startDate, endDate);
+      set({ historicalTickets: tickets, historicalLoading: false });
+    } catch (err: any) {
+      console.error("Failed to fetch historical tickets:", err);
+      set({ historicalLoading: false, reportError: err.message || "Failed to load historical tickets." });
     }
   },
 });

@@ -40,30 +40,56 @@ export function QueueTab({
   const { t } = useTranslation();
 
   // Categorize tickets based on current filters
-  const waitingTickets = tickets.filter(tItem => tItem.status === "waiting");
+  const waitingTickets = React.useMemo(() => {
+    return tickets.filter(tItem => tItem.status === "waiting");
+  }, [tickets]);
   
-  const filteredWaitingTickets = tickets.filter(
-    tItem => tItem.status === "waiting" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
-  );
+  const filteredWaitingTickets = React.useMemo(() => {
+    return tickets.filter(
+      tItem => tItem.status === "waiting" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
+    );
+  }, [tickets, selectedQueueServiceId]);
   
-  const filteredPastTickets = tickets.filter(
-    tItem => (tItem.status === "completed" || tItem.status === "cancelled" || tItem.status === "no_show") && 
-             (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
-  );
+  const filteredPastTickets = React.useMemo(() => {
+    return tickets.filter(
+      tItem => (tItem.status === "completed" || tItem.status === "cancelled" || tItem.status === "no_show") && 
+               (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
+    );
+  }, [tickets, selectedQueueServiceId]);
 
-  const filteredScheduledTickets = tickets.filter(
-    tItem => tItem.status === "scheduled" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
-  );
+  const filteredScheduledTickets = React.useMemo(() => {
+    return tickets.filter(
+      tItem => tItem.status === "scheduled" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
+    );
+  }, [tickets, selectedQueueServiceId]);
 
-  const activeCallingTicket = tickets.find(
-    tItem => tItem.status === "calling" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
-  );
+  const activeCallingTicket = React.useMemo(() => {
+    return tickets.find(
+      tItem => tItem.status === "calling" && (selectedQueueServiceId === "all" || tItem.serviceId === selectedQueueServiceId)
+    );
+  }, [tickets, selectedQueueServiceId]);
 
   // Calculate total expected wait time for the waiting queue
-  const totalCurrentWaitTime = waitingTickets.reduce((acc, ticket) => {
-    const service = services.find(s => s.id === ticket.serviceId);
-    return acc + (service?.avgDurationMinutes || 15);
-  }, 0);
+  const totalCurrentWaitTime = React.useMemo(() => {
+    return waitingTickets.reduce((acc, ticket) => {
+      const service = services.find(s => s.id === ticket.serviceId);
+      return acc + (service?.avgDurationMinutes || 15);
+    }, 0);
+  }, [waitingTickets, services]);
+
+  // Pre-calculate waiting and completed ticket counts to avoid inline filtering during render
+  const waitingCount = waitingTickets.length;
+  const completedCount = React.useMemo(() => {
+    return tickets.filter(tItem => tItem.status === "completed").length;
+  }, [tickets]);
+
+  const serviceWaitingCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    services.forEach(service => {
+      counts[service.id] = tickets.filter(tItem => tItem.status === "waiting" && tItem.serviceId === service.id).length;
+    });
+    return counts;
+  }, [tickets, services]);
 
   return (
     <div className="space-y-6 animate-fade-in animate-duration-200" id="queue-board-tab">
@@ -94,11 +120,11 @@ export function QueueTab({
                 : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
             }`}
           >
-            {t("vend_all_waiting_paths", "All Waiting Paths")} ({tickets.filter(tItem => tItem.status === "waiting").length})
+            {t("vend_all_waiting_paths", "All Waiting Paths")} ({waitingCount})
           </button>
           
           {services.map((service) => {
-            const serviceWaitingCount = tickets.filter(tItem => tItem.status === "waiting" && tItem.serviceId === service.id).length;
+            const serviceWaitingCount = serviceWaitingCounts[service.id] || 0;
             return (
               <button
                 key={service.id}
@@ -150,7 +176,7 @@ export function QueueTab({
               {t("vend_currently_waiting_stat", "Currently Waiting")}
             </span>
             <span className="block text-xl font-black text-slate-900 dark:text-white font-mono">
-              {tickets.filter(tItem => tItem.status === "waiting").length}
+              {waitingCount}
             </span>
           </div>
         </div>
@@ -165,7 +191,7 @@ export function QueueTab({
               {t("vend_served_customers_stat", "Served Customers")}
             </span>
             <span className="block text-xl font-black text-slate-900 dark:text-white font-mono">
-              {tickets.filter(tItem => tItem.status === "completed").length}
+              {completedCount}
             </span>
           </div>
         </div>
@@ -219,10 +245,10 @@ export function QueueTab({
               onChange={(e) => updateCounterStatus(e.target.value as any)}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-2xl text-xs font-bold focus:outline-none cursor-pointer"
             >
-              <option value="online">🟢 {t("counter_status_online", "Online")}</option>
-              <option value="busy">🔴 {t("counter_status_busy", "Busy")}</option>
-              <option value="break">☕ {t("counter_status_break", "Break")}</option>
-              <option value="offline">⚪ {t("counter_status_offline", "Offline")}</option>
+              <option value="online">🟢 {t("vend_status_online", "Online")}</option>
+              <option value="busy">🔴 {t("vend_status_busy_option", "Busy")}</option>
+              <option value="break">☕ {t("vend_status_break_option", "Break")}</option>
+              <option value="offline">⚪ {t("vend_status_offline", "Offline")}</option>
             </select>
           </div>
         </div>
@@ -250,8 +276,8 @@ export function QueueTab({
             ) : (
               <div className="text-slate-400 dark:text-slate-500 text-xs py-4">
                 <Users className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2 animate-bounce" />
-                <p className="font-bold">{t("vend_no_active_customer", "No customer is currently called.")}</p>
-                <p className="text-[10px] text-slate-400 mt-1">{t("vend_click_next_guidance", "Click 'Call Next' to invoke the first client in queue.")}</p>
+                <p className="font-bold">{t("vend_no_active_called_ticket", "No active ticket is currently being called.")}</p>
+                <p className="text-[10px] text-slate-400 mt-1">{t("vend_click_call_next_desc", "Click 'Call Next Customer' to pull the next ticket.")}</p>
               </div>
             )}
             <div className="absolute top-0 end-0 w-20 h-20 bg-indigo-50/20 dark:bg-indigo-900/5 rounded-full blur-xl pointer-events-none" />
@@ -277,7 +303,7 @@ export function QueueTab({
                   if (activeCallingTicket) {
                     handleUpdateTicketStatus(activeCallingTicket.id, "completed");
                   } else {
-                    alert(t("vend_no_active_customer"));
+                    alert(t("vend_no_active_called_ticket", "No active ticket is currently being called."));
                   }
                 }}
                 disabled={!activeCallingTicket}
@@ -293,7 +319,7 @@ export function QueueTab({
                   if (activeCallingTicket) {
                     handleUpdateTicketStatus(activeCallingTicket.id, "cancelled");
                   } else {
-                    alert(t("vend_no_active_customer"));
+                    alert(t("vend_no_active_called_ticket", "No active ticket is currently being called."));
                   }
                 }}
                 disabled={!activeCallingTicket}
@@ -318,7 +344,7 @@ export function QueueTab({
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-amber-500" />
               <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                {t("vend_waiting_customers_title", "Waiting Customers Queue")}
+                {t("vend_waiting_customers_header", "Waiting Customers")}
               </h4>
             </div>
             <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-black border border-slate-200 dark:border-slate-700">
@@ -466,7 +492,7 @@ export function QueueTab({
           <div className="space-y-1">
             <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
               <CalendarRange className="w-4 h-4 text-indigo-600" />
-              <span>{t("vend_scheduled_appointments_header", "Scheduled Appointments & Future Bookings")}</span>
+              <span>{t("vend_scheduled_appointments_title", "Scheduled Appointments & Future Bookings")}</span>
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {t("vend_scheduled_appointments_desc", "Clients who booked in advance. Click 'Check In' to instantly move them to the active waiting queue upon arrival.")}
@@ -474,7 +500,7 @@ export function QueueTab({
           </div>
 
           <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 text-xs font-black border border-indigo-100 dark:border-indigo-900/30 self-start sm:self-auto">
-            {filteredScheduledTickets.length} {t("vend_scheduled_badge_label", "Scheduled")}
+            {filteredScheduledTickets.length} {t("vend_scheduled_status_count", "Scheduled")}
           </span>
         </div>
 

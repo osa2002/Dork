@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   QrCode, Copy, Check, Download, Info, Clock, Save, 
-  Upload, Scissors, Stethoscope, Landmark, PhoneCall, UtensilsCrossed, HelpCircle 
+  Upload, Scissors, Stethoscope, Landmark, PhoneCall, UtensilsCrossed, HelpCircle,
+  Printer, Palette, Sparkles, Image as ImageIcon, X, ExternalLink, Smartphone, CheckCircle2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Shop, WorkingHoursDay } from "../../types";
+import { getAppOrigin } from "../../lib/originUtils";
+import QRCode from "qrcode";
 
 interface QrTabProps {
   shop: Shop | null;
@@ -88,6 +91,274 @@ export function QrTab({
   isRtl
 }: QrTabProps) {
   const { t } = useTranslation();
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+  const [qrFgColor, setQrFgColor] = useState<string>("#0f172a");
+  const [qrBgColor, setQrBgColor] = useState<string>("#ffffff");
+  const [showLogoOverlay, setShowLogoOverlay] = useState<boolean>(true);
+  const [showPosterModal, setShowPosterModal] = useState<boolean>(false);
+  const [isExportingPoster, setIsExportingPoster] = useState<boolean>(false);
+
+  const posterRef = useRef<HTMLDivElement>(null);
+
+  // Sync QR color with shop ticket color initially if unchanged
+  useEffect(() => {
+    if (editShopTicketColor && qrFgColor === "#0f172a") {
+      setQrFgColor(editShopTicketColor);
+    }
+  }, [editShopTicketColor]);
+
+  // Generate dynamic unique QR code data URL whenever slug or color options change
+  useEffect(() => {
+    if (shop?.slug) {
+      const targetUrl = `${getAppOrigin()}/portal/${encodeURIComponent(shop.slug)}?src=qr_entrance`;
+      QRCode.toDataURL(
+        targetUrl,
+        {
+          width: 600,
+          margin: 1,
+          color: {
+            dark: qrFgColor || "#0f172a",
+            light: qrBgColor || "#ffffff",
+          },
+        },
+        (err, dataUrl) => {
+          if (err) {
+            console.error("Failed to generate dynamic QR Code:", err);
+            return;
+          }
+          setQrCodeDataUrl(dataUrl);
+        }
+      );
+    }
+  }, [shop?.slug, qrFgColor, qrBgColor]);
+
+  // Download Standalone High-Res QR PNG
+  const downloadQrCodeImage = () => {
+    if (!qrCodeDataUrl || !shop?.slug) return;
+    const link = document.createElement("a");
+    link.href = qrCodeDataUrl;
+    link.download = `qr_code_${shop.slug}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Generate and Download Complete High-Res Printable Entrance Poster Card on HTML5 Canvas
+  const downloadPosterImage = async () => {
+    if (!shop?.slug || !qrCodeDataUrl) return;
+    setIsExportingPoster(true);
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // High-resolution A4-proportioned poster canvas
+      const width = 1200;
+      const height = 1600;
+      canvas.width = width;
+      canvas.height = height;
+
+      // 1. Background Fill
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      // 2. Top Header Accent Banner
+      const accentColor = editShopTicketColor || qrFgColor || "#4f46e5";
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(0, 0, width, 24);
+
+      // Gradient Header Area
+      const grad = ctx.createLinearGradient(0, 24, 0, 360);
+      grad.addColorStop(0, "#0f172a");
+      grad.addColorStop(1, "#1e293b");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 24, width, 336);
+
+      // Subtle Decorative Circle in header
+      ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+      ctx.beginPath();
+      ctx.arc(width / 2, 190, 260, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Shop Title & Subtitle in Header
+      const displayShopName = editShopName || shop.name || "صالون ومركز الانتظار";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 56px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(displayShopName, width / 2, 140);
+
+      const displayCategory = editShopLogoText || shop.logoText || "طابور إلكتروني منظم - انضم بنقرة واحدة";
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 28px system-ui, -apple-system, sans-serif";
+      ctx.fillText(displayCategory, width / 2, 200);
+
+      // Header Tagline Badge
+      ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.roundRect(width / 2 - 280, 240, 560, 50, 25);
+      ctx.fill();
+
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 22px system-ui, -apple-system, sans-serif";
+      ctx.fillText(t("qr_poster_scan_title", "امسح الرمز للحصول على رقم دورك"), width / 2, 273);
+
+      // 4. White Card for QR Code
+      const cardX = 150;
+      const cardY = 400;
+      const cardW = 900;
+      const cardH = 750;
+
+      // Card Shadow & Border
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "rgba(15, 23, 42, 0.08)";
+      ctx.shadowBlur = 40;
+      ctx.shadowOffsetY = 20;
+      ctx.roundRect(cardX, cardY, cardW, cardH, 36);
+      ctx.fill();
+
+      ctx.shadowColor = "transparent"; // Reset shadow
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Load & Draw QR Code Image
+      const qrImg = new Image();
+      qrImg.crossOrigin = "anonymous";
+      qrImg.src = qrCodeDataUrl;
+      await new Promise((resolve) => {
+        qrImg.onload = resolve;
+      });
+
+      const qrSize = 480;
+      const qrX = width / 2 - qrSize / 2;
+      const qrY = cardY + 70;
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+      // Optional Logo Overlay in Center of QR Code
+      if (showLogoOverlay && (editShopLogoUrl || shop.logoUrl)) {
+        const logoImg = new Image();
+        logoImg.crossOrigin = "anonymous";
+        logoImg.src = editShopLogoUrl || shop.logoUrl || "";
+        await new Promise((resolve) => {
+          logoImg.onload = resolve;
+          logoImg.onerror = resolve; // Continue if error
+        });
+
+        if (logoImg.complete && logoImg.naturalWidth > 0) {
+          const logoSize = 100;
+          const logoX = width / 2 - logoSize / 2;
+          const logoY = qrY + qrSize / 2 - logoSize / 2;
+
+          // White background circle behind logo
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(width / 2, qrY + qrSize / 2, logoSize / 2 + 10, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = accentColor;
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          // Draw clipped circular logo
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(width / 2, qrY + qrSize / 2, logoSize / 2, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+          ctx.restore();
+        }
+      }
+
+      // Instruction Text below QR
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "black 32px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(t("qr_poster_scan_sub", "طابور إلكتروني منظم - انضم بنقرة واحدة بدون عناء الانتظار"), width / 2, cardY + 610);
+
+      // Public URL Display
+      const portalUrl = `${getAppOrigin()}/portal/${encodeURIComponent(shop.slug)}`;
+      ctx.fillStyle = "#64748b";
+      ctx.font = "bold 22px monospace";
+      ctx.fillText(portalUrl, width / 2, cardY + 670);
+
+      // 5. 3 Step Guidance Cards
+      const stepY = 1200;
+      const stepW = 320;
+      const stepGap = 40;
+      const startX = (width - (stepW * 3 + stepGap * 2)) / 2;
+
+      const stepsData = [
+        { title: t("qr_poster_step1_title", "1. امسح الرمز"), desc: t("qr_poster_step1_desc", "افتح كاميرا هاتفك ووجهها نحو الرمز") },
+        { title: t("qr_poster_step2_title", "2. اختر الخدمة"), desc: t("qr_poster_step2_desc", "اختر نوع الخدمة واقطع تذكرتك الإلكترونية") },
+        { title: t("qr_poster_step3_title", "3. تابع دورك"), desc: t("qr_poster_step3_desc", "تلقى تنبيهات حية فور اقتراب نداء دورك") }
+      ];
+
+      stepsData.forEach((s, idx) => {
+        const sx = startX + idx * (stepW + stepGap);
+        ctx.fillStyle = "#f8fafc";
+        ctx.roundRect(sx, stepY, stepW, 200, 24);
+        ctx.fill();
+
+        ctx.strokeStyle = "#f1f5f9";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = accentColor;
+        ctx.font = "bold 24px system-ui, -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(s.title, sx + stepW / 2, stepY + 60);
+
+        ctx.fillStyle = "#64748b";
+        ctx.font = "500 18px system-ui, -apple-system, sans-serif";
+        
+        // Wrap text
+        const words = s.desc.split(" ");
+        let line = "";
+        let lineY = stepY + 110;
+        for (let w = 0; w < words.length; w++) {
+          const testLine = line + words[w] + " ";
+          if (ctx.measureText(testLine).width > stepW - 30 && w > 0) {
+            ctx.fillText(line, sx + stepW / 2, lineY);
+            line = words[w] + " ";
+            lineY += 28;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, sx + stepW / 2, lineY);
+      });
+
+      // 6. Footer
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, 1480, width, 120);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 24px system-ui, -apple-system, sans-serif";
+      ctx.fillText(t("qr_poster_footer", "أهلاً وسهلاً بكم • نظام إدارة الطوابير الذكي"), width / 2, 1530);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 18px monospace";
+      ctx.fillText("Dork Digital Queue Platform", width / 2, 1570);
+
+      // Save image
+      const dataUrl = canvas.toDataURL("image/png");
+      const downloadLink = document.createElement("a");
+      downloadLink.href = dataUrl;
+      downloadLink.download = `entrance_poster_${shop.slug}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } catch (err) {
+      console.error("Failed to render canvas entrance poster:", err);
+    } finally {
+      setIsExportingPoster(false);
+    }
+  };
+
+  // Direct Window Print Handler
+  const handlePrintPosterNow = () => {
+    window.print();
+  };
 
   const handleWorkingHoursDayToggle = (dayKey: string) => {
     const updated = { ...workingHoursDays };
@@ -119,9 +390,37 @@ export function QrTab({
 
   return (
     <div className="space-y-6 animate-fade-in animate-duration-200" id="qr-settings-tab">
+      
+      {/* Printable Poster CSS rules */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-entrance-poster, #printable-entrance-poster * {
+            visibility: visible;
+          }
+          #printable-entrance-poster {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 2rem;
+            background: white !important;
+            z-index: 99999;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
+          }
+        }
+      `}</style>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* Left Side: QR Code & Public Link */}
+        {/* Left Side: QR Code Generator & Entrance Poster Actions */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm text-center space-y-6">
             <div className="flex flex-col items-center gap-2">
@@ -136,33 +435,99 @@ export function QrTab({
               </p>
             </div>
 
-            {/* QR Image Visual container */}
+            {/* Dynamic QR Code Canvas Visual Display */}
             <div className="relative inline-block bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-900/60 shadow-inner group">
-              <div id="qr-code-element" className="relative z-10 p-2 bg-white rounded-xl">
-                {shop?.slug ? (
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/portal/${shop.slug}`)}&color=0f172a&bgcolor=ffffff&qzone=1`}
-                    alt="Customer Portal QR Code"
-                    className="w-40 h-40 object-contain mx-auto"
-                    crossOrigin="anonymous"
-                  />
+              <div id="qr-code-element" className="relative z-10 p-3 bg-white rounded-2xl shadow-sm">
+                {shop?.slug && qrCodeDataUrl ? (
+                  <div className="relative inline-block">
+                    <img 
+                      src={qrCodeDataUrl}
+                      alt="Customer Portal Dynamic QR Code"
+                      className="w-44 h-44 object-contain mx-auto rounded-lg"
+                    />
+                    {showLogoOverlay && (editShopLogoUrl || shop?.logoUrl) && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-10 h-10 rounded-full bg-white p-1 shadow-md border-2 border-indigo-500 flex items-center justify-center overflow-hidden">
+                          <img 
+                            src={editShopLogoUrl || shop?.logoUrl} 
+                            alt="Shop Logo" 
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <div className="w-40 h-40 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 text-[10px] font-bold">
-                    {t("vend_loading_qr_slug", "Loading Slug...")}
+                  <div className="w-44 h-44 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 text-[10px] font-bold">
+                    {t("vend_loading_qr_slug", "Loading Link...")}
                   </div>
                 )}
               </div>
               <div className="absolute inset-0 bg-indigo-600/5 dark:bg-indigo-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
             </div>
 
+            {/* Customization Options Bar */}
+            <div className="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-150 dark:border-slate-800/80 space-y-3 text-start">
+              <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
+                <Palette className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>{t("qr_customize_title", "Customize QR Code Styling")}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-1">
+                    {t("qr_color_fg", "QR Modules Color")}
+                  </label>
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-1.5 rounded-xl">
+                    <input 
+                      type="color" 
+                      value={qrFgColor} 
+                      onChange={(e) => setQrFgColor(e.target.value)}
+                      className="w-6 h-6 rounded-lg border-0 p-0 cursor-pointer"
+                    />
+                    <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">{qrFgColor}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-1">
+                    {t("qr_color_bg", "Background Color")}
+                  </label>
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-1.5 rounded-xl">
+                    <input 
+                      type="color" 
+                      value={qrBgColor} 
+                      onChange={(e) => setQrBgColor(e.target.value)}
+                      className="w-6 h-6 rounded-lg border-0 p-0 cursor-pointer"
+                    />
+                    <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">{qrBgColor}</span>
+                  </div>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={showLogoOverlay} 
+                  onChange={(e) => setShowLogoOverlay(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                />
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {t("qr_show_logo", "Embed Shop Logo in Center")}
+                </span>
+              </label>
+            </div>
+
+            {/* Copy Link & Action Buttons */}
             <div className="space-y-3">
               {/* Public Link Copy Input */}
               <div className="relative">
                 <input 
                   type="text"
                   readOnly
-                  value={shop?.slug ? `${window.location.origin}/portal/${shop.slug}` : ""}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 px-4 py-3.5 pe-24 rounded-2xl text-[11px] font-black focus:outline-none focus:ring-0 truncate"
+                  value={shop?.slug ? `${getAppOrigin()}/portal/${encodeURIComponent(shop.slug)}` : ""}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 px-4 py-3.5 pe-24 rounded-2xl text-[11px] font-black focus:outline-none focus:ring-0 truncate font-mono dir-ltr text-left"
+                  dir="ltr"
                 />
                 <button
                   onClick={handleCopyLink}
@@ -183,14 +548,35 @@ export function QrTab({
                 </button>
               </div>
 
-              {/* QR Download Button */}
+              {/* Primary Action 1: Print & Preview Entrance Poster */}
               <button
-                onClick={handleDownloadQR}
-                className="w-full border border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-extrabold text-xs py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                id="btn-download-qr"
+                onClick={() => setShowPosterModal(true)}
+                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-indigo-100 dark:shadow-none"
+                id="btn-preview-poster"
               >
-                <Download className="w-4 h-4 text-slate-500" />
-                <span>{t("vend_download_qr_btn", "Download QR Code Image")}</span>
+                <Printer className="w-4 h-4" />
+                <span>{t("qr_entrance_poster_btn", "Preview & Print Entrance Poster")}</span>
+              </button>
+
+              {/* Action 2: Download High-Res Entrance Poster PNG */}
+              <button
+                onClick={downloadPosterImage}
+                disabled={isExportingPoster}
+                className="w-full border border-slate-200 dark:border-slate-800 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200 font-extrabold text-xs py-3 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                id="btn-download-poster-png"
+              >
+                <Download className="w-4 h-4 text-indigo-600" />
+                <span>{isExportingPoster ? "جاري إنشاء البوستر..." : t("qr_download_poster_png", "Download Printable Poster Card (PNG)")}</span>
+              </button>
+
+              {/* Action 3: Download Standalone QR Code Only */}
+              <button
+                onClick={downloadQrCodeImage}
+                className="w-full border border-slate-200/80 dark:border-slate-800/80 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 font-bold text-[11px] py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                id="btn-download-qr-only"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>{t("qr_download_code_only", "Download Standalone QR Code (PNG)")}</span>
               </button>
             </div>
           </div>
@@ -332,6 +718,7 @@ export function QrTab({
                       src={editShopLogoUrl}
                       alt="Brand Logo Preview"
                       className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shadow-sm"
+                      referrerPolicy="no-referrer"
                     />
                     <div className="text-left space-y-1">
                       <p className="text-xs font-black text-slate-800 dark:text-white">
@@ -581,6 +968,158 @@ export function QrTab({
         </div>
 
       </div>
+
+      {/* Entrance Poster Print Preview Modal */}
+      {showPosterModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-8">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    {t("qr_poster_modal_title", "Printable Entrance Poster Sign")}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t("qr_poster_modal_desc", "Print this official poster sign and display it at your store entrance or front desk so customers can self-issue tickets.")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowPosterModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Live Printable Poster Design Card */}
+            <div 
+              ref={posterRef}
+              id="printable-entrance-poster"
+              className="bg-white text-slate-900 border-4 border-slate-900 rounded-3xl p-6 sm:p-8 space-y-6 text-center shadow-xl relative overflow-hidden"
+            >
+              {/* Top Accent Stripe */}
+              <div className="absolute top-0 inset-x-0 h-3" style={{ backgroundColor: editShopTicketColor || qrFgColor || "#4f46e5" }} />
+
+              {/* Shop Logo & Title */}
+              <div className="pt-2 space-y-2">
+                {(editShopLogoUrl || shop?.logoUrl) ? (
+                  <img 
+                    src={editShopLogoUrl || shop?.logoUrl} 
+                    alt="Logo" 
+                    className="w-16 h-16 rounded-2xl object-cover mx-auto border-2 border-slate-200 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white font-black text-2xl flex items-center justify-center mx-auto shadow-md">
+                    {(editShopName || shop?.name || "Q").charAt(0)}
+                  </div>
+                )}
+
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                  {editShopName || shop?.name || "اسم المتجر"}
+                </h2>
+                
+                <p className="text-xs sm:text-sm font-extrabold text-slate-500 max-w-md mx-auto">
+                  {editShopLogoText || shop?.logoText || t("qr_poster_scan_sub", "طابور إلكتروني منظم - انضم بنقرة واحدة بدون عناء الانتظار")}
+                </p>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="bg-slate-50 border-2 border-slate-200 p-6 rounded-3xl max-w-xs mx-auto space-y-3 shadow-inner">
+                <div className="bg-white p-3 rounded-2xl shadow-sm inline-block relative">
+                  {qrCodeDataUrl ? (
+                    <div className="relative inline-block">
+                      <img 
+                        src={qrCodeDataUrl} 
+                        alt="Entrance QR Code" 
+                        className="w-52 h-52 object-contain mx-auto rounded-lg"
+                      />
+                      {showLogoOverlay && (editShopLogoUrl || shop?.logoUrl) && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-12 h-12 rounded-full bg-white p-1 shadow-md border-2 border-indigo-600 flex items-center justify-center overflow-hidden">
+                            <img 
+                              src={editShopLogoUrl || shop?.logoUrl} 
+                              alt="Shop Logo" 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-52 h-52 bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs">
+                      Loading QR...
+                    </div>
+                  )}
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>{t("qr_poster_scan_title", "امسح الرمز للحصول على رقم دورك")}</span>
+                </div>
+              </div>
+
+              {/* 3 Steps Guidance Grid */}
+              <div className="grid grid-cols-3 gap-3 text-start">
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
+                  <span className="text-xs font-black text-indigo-600 block">{t("qr_poster_step1_title", "1. امسح الرمز")}</span>
+                  <p className="text-[10px] font-semibold text-slate-600 leading-snug">{t("qr_poster_step1_desc", "افتح كاميرا هاتفك ووجهها نحو الرمز")}</p>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
+                  <span className="text-xs font-black text-indigo-600 block">{t("qr_poster_step2_title", "2. اختر الخدمة")}</span>
+                  <p className="text-[10px] font-semibold text-slate-600 leading-snug">{t("qr_poster_step2_desc", "اختر نوع الخدمة واقطع تذكرتك الإلكترونية")}</p>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-1">
+                  <span className="text-xs font-black text-indigo-600 block">{t("qr_poster_step3_title", "3. تابع دورك")}</span>
+                  <p className="text-[10px] font-semibold text-slate-600 leading-snug">{t("qr_poster_step3_desc", "تلقى تنبيهات حية فور اقتراب نداء دورك")}</p>
+                </div>
+              </div>
+
+              {/* Footer text */}
+              <div className="border-t border-slate-200 pt-3 text-center space-y-0.5">
+                <p className="text-xs font-black text-slate-700">{t("qr_poster_footer", "أهلاً وسهلاً بكم • نظام إدارة الطوابير الذكي")}</p>
+                <p className="text-[10px] font-mono font-bold text-slate-400">{`${getAppOrigin()}/portal/${shop?.slug || ""}`}</p>
+              </div>
+            </div>
+
+            {/* Modal Controls */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowPosterModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                {t("close", "إغلاق")}
+              </button>
+
+              <button
+                onClick={downloadPosterImage}
+                disabled={isExportingPoster}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-800 dark:text-slate-200 font-black text-xs transition-all cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                <Download className="w-4 h-4 text-indigo-600" />
+                <span>{t("qr_download_poster_png", "Download Printable Poster Card (PNG)")}</span>
+              </button>
+
+              <button
+                onClick={handlePrintPosterNow}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{t("btn_print_now", "Print Poster Now")}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

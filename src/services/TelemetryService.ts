@@ -1,5 +1,6 @@
 import { logContextStorage } from "../lib/serverLogger";
 import { MetricsService } from "./MetricsService";
+import { EnterpriseEventBus } from "../../server/chaos/governance/EnterpriseEventBus";
 
 export interface SpanContext {
   traceId: string;
@@ -180,6 +181,14 @@ export class TelemetryService {
       } else {
         console.warn(`\x1b[33m[PERF WARN]\x1b[0m ${warningMessage}`);
       }
+
+      EnterpriseEventBus.publish("AlertTriggered", {
+        alertId: `alt-${Math.random().toString(36).substring(2, 9)}`,
+        metric: `latency:${category}`,
+        threshold,
+        actualValue: durationMs,
+        severity: "WARNING",
+      }, logContextStorage.getStore()?.correlationId);
     }
   }
 }

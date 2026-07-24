@@ -1,5 +1,6 @@
 export * from "./shopRepository";
 export * from "./queueRepository";
+export * from "./counterRepository";
 export * from "./notificationRepository";
 export * from "./feedbackRepository";
 export * from "./vendorShopRepository";

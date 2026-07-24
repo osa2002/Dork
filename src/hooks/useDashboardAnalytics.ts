@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Ticket } from "../types";
 import { useVendorStore } from "../store/vendor/vendorStore";
+import { useUiStore } from "../store";
 import { calculateAnalyticsOverview } from "../store/vendor/utils/analyticsCalculations";
 
 interface UseDashboardAnalyticsProps {
@@ -20,6 +21,12 @@ export function useDashboardAnalytics({ tickets, allTickets }: UseDashboardAnaly
   const aiAnalysis = useVendorStore((state) => state.aiAnalysis);
   const aiLoading = useVendorStore((state) => state.aiLoading);
   const aiError = useVendorStore((state) => state.aiError);
+  
+  // Historical tickets selectors
+  const historicalTickets = useVendorStore((state) => state.historicalTickets || []);
+  const fetchHistoricalTickets = useVendorStore((state) => state.fetchHistoricalTickets);
+  const shop = useVendorStore((state) => state.shop);
+  const activeTab = useUiStore((state) => state.activeDashboardTab);
 
   // Atomic Zustand action selectors
   const setReportStartDate = useVendorStore((state) => state.setReportStartDate);
@@ -27,10 +34,19 @@ export function useDashboardAnalytics({ tickets, allTickets }: UseDashboardAnaly
   const handleExportCSVStore = useVendorStore((state) => state.handleExportCSV);
   const handleRequestAiDiagnostics = useVendorStore((state) => state.handleRequestAiDiagnostics);
 
+  const shopId = shop?.id;
+
+  // Trigger historical tickets fetch only when the reports tab is active OR the date range changes
+  useEffect(() => {
+    if (activeTab === "reports" && shopId) {
+      fetchHistoricalTickets(shopId, reportStartDate, reportEndDate);
+    }
+  }, [activeTab, shopId, reportStartDate, reportEndDate, fetchHistoricalTickets]);
+
   // Pure heavy calculations with reference stability
   const overview = useMemo(() => {
-    return calculateAnalyticsOverview(allTickets, reportStartDate, reportEndDate);
-  }, [allTickets, reportStartDate, reportEndDate]);
+    return calculateAnalyticsOverview(historicalTickets, reportStartDate, reportEndDate);
+  }, [historicalTickets, reportStartDate, reportEndDate]);
 
   // Orchestrated event handlers
   const handleExportCSV = async () => {
@@ -38,7 +54,7 @@ export function useDashboardAnalytics({ tickets, allTickets }: UseDashboardAnaly
   };
 
   const handleAskAiDiagnostics = async () => {
-    await handleRequestAiDiagnostics(allTickets);
+    await handleRequestAiDiagnostics(historicalTickets);
   };
 
   return {

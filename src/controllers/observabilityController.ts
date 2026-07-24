@@ -5,6 +5,8 @@ import { getDatabaseProvider } from "../lib/DatabaseProvider";
 import { MetricsService } from "../services/MetricsService";
 import { ConfigValidator } from "../services/ConfigValidator";
 import { FeatureFlagService, FeatureFlag } from "../services/FeatureFlagService";
+import { ChaosHealthContributor } from "../../server/chaos/intelligence/ChaosHealthContributor";
+import { RuntimeDependencyGraph } from "../../server/chaos/intelligence/RuntimeDependencyGraph";
 
 // Cache package version
 let packageVersion = "1.0.0";
@@ -31,6 +33,7 @@ async function measureEventLoopDelay(): Promise<number> {
  * Perform a lightweight read to verify Firestore connectivity
  */
 async function verifyFirestoreConnectivity(): Promise<{ status: "connected" | "disconnected"; error?: string }> {
+  const start = Date.now();
   const timeoutMs = 1500;
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error("Firestore check timed out after 1.5s")), timeoutMs)
@@ -58,8 +61,12 @@ async function verifyFirestoreConnectivity(): Promise<{ status: "connected" | "d
     })();
 
     await Promise.race([dbPromise, timeoutPromise]);
+    const durationMs = Date.now() - start;
+    RuntimeDependencyGraph.recordCall("ExpressServer", "Firestore", durationMs, true);
     return { status: "connected" };
   } catch (err: any) {
+    const durationMs = Date.now() - start;
+    RuntimeDependencyGraph.recordCall("ExpressServer", "Firestore", durationMs, false);
     return { status: "disconnected", error: err.message };
   }
 }
@@ -121,10 +128,18 @@ export async function getHealth(req: Request, res: Response) {
   const isGeminiConfigured = !!process.env.GEMINI_API_KEY;
 
   // Derive general status
-  const isHealthy = firestoreCheck.status === "connected" && eventLoopLag < 100;
+  const baseHealthy = firestoreCheck.status === "connected" && eventLoopLag < 100;
+  const chaosHealth = ChaosHealthContributor.getHealthStatus();
+
+  let overallStatus = "healthy";
+  if (!baseHealthy) {
+    overallStatus = "unhealthy";
+  } else if (chaosHealth.status !== "HEALTHY") {
+    overallStatus = chaosHealth.status.toLowerCase();
+  }
 
   const healthData = {
-    status: isHealthy ? "healthy" : "unhealthy",
+    status: overallStatus,
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime()),
     latencyMs: Date.now() - start,
@@ -135,6 +150,12 @@ export async function getHealth(req: Request, res: Response) {
       firestore: firestoreCheck.status === "connected" ? "healthy" : "unhealthy",
       stripeConfig: isStripeConfigured ? "configured" : "using_fallback_sandbox",
       geminiConfig: isGeminiConfigured ? "configured" : "using_fallback_local",
+      chaosHealth: {
+        status: chaosHealth.status,
+        reason: chaosHealth.reason,
+        activeScenarios: chaosHealth.activeScenarios,
+        impactScore: chaosHealth.impactScore,
+      },
     },
     system: {
       memory: sysMetrics.memory,
@@ -142,7 +163,9 @@ export async function getHealth(req: Request, res: Response) {
     },
   };
 
-  if (isHealthy) {
+  const isUp = overallStatus === "healthy" || overallStatus === "degraded" || overallStatus === "partial_outage";
+
+  if (isUp) {
     res.status(200).json(healthData);
   } else {
     res.status(503).json(healthData);

@@ -52,7 +52,7 @@ service cloud.firestore {
                        request.resource.data.status == 'cancelled' &&
                        resource.data.status == 'waiting'
                      );
-      allow delete: if isShopOwner(resource.data.shopId);
+      allow delete: if isShopOwner(resource.data.shopId) || exists(/databases/$(database)/documents/shops/server_cleanup/private/verification);
     }
 
     // 5. Displays Collection
@@ -67,7 +67,8 @@ service cloud.firestore {
 
     // 6. Archived Tickets Collection
     match /archived_tickets/{ticketId} {
-      allow read, write: if false; // Secure: Server-side only (Admin SDK bypasses rules)
+      allow read: if false;
+      allow write: if exists(/databases/$(database)/documents/shops/server_cleanup/private/verification);
     }
 
     // 7. Booking Errors Collection
@@ -87,6 +88,20 @@ service cloud.firestore {
       allow read: if true; // Anyone can view window statuses
       allow write: if (isSignedIn() && (statusId.startsWith(request.auth.uid + "_") || statusId.startsWith("demo_user_"))) ||
                       (request.resource.data.shopId != null && isShopOwner(request.resource.data.shopId));
+    }
+
+    // 10. Webhooks Collection
+    match /webhooks/{webhookId} {
+      allow read: if isShopOwner(resource.data.shopId);
+      allow create: if isShopOwner(request.resource.data.shopId);
+      allow update, delete: if isShopOwner(resource.data.shopId);
+    }
+
+    // 11. Webhook Logs Collection
+    match /webhook_logs/{logId} {
+      allow read: if isShopOwner(resource.data.shopId);
+      allow create: if isShopOwner(request.resource.data.shopId);
+      allow update, delete: if isShopOwner(resource.data.shopId);
     }
   }
 }

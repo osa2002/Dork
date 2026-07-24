@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Lock, ArrowLeft, CreditCard, ShieldCheck, Loader2 } from "lucide-react";
+import { getAppOrigin } from "../lib/originUtils";
 
 interface StripeMockCheckoutProps {
   sessionId: string;
@@ -48,7 +49,7 @@ export default function StripeMockCheckout({
         );
         setTimeout(() => {
           // Redirect back to dashboard with success query parameters
-          const origin = window.location.origin;
+          const origin = getAppOrigin();
           window.location.href = `${origin}/?page=dashboard&stripe_status=success&session_id=${sessionId}&shopId=${shopId}`;
         }, 1000);
       }, 1500);
@@ -56,7 +57,7 @@ export default function StripeMockCheckout({
   };
 
   const handleCancel = () => {
-    const origin = window.location.origin;
+    const origin = getAppOrigin();
     window.location.href = `${origin}/?page=dashboard&stripe_status=cancel&shopId=${shopId}`;
   };
 

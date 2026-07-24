@@ -117,6 +117,43 @@
         "date": { "type": "string", "description": "Date string in YYYY-MM-DD format" }
       },
       "required": ["count", "shopId", "date"]
+    },
+    "Webhook": {
+      "title": "Webhook",
+      "description": "Represents an automated HTTP webhook endpoint configured by a shop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique webhook identifier" },
+        "shopId": { "type": "string", "description": "Associated shop ID" },
+        "name": { "type": "string", "description": "Name of the webhook" },
+        "url": { "type": "string", "description": "Target HTTP destination URL" },
+        "events": { "type": "array", "description": "Array of subscribed events e.g. ticket.called" },
+        "secret": { "type": "string", "description": "HMAC signature secret" },
+        "headers": { "type": "array", "description": "Custom HTTP headers" },
+        "isActive": { "type": "boolean", "description": "Is active and listening" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "shopId", "name", "url", "events", "isActive", "createdAt"]
+    },
+    "WebhookLog": {
+      "title": "WebhookLog",
+      "description": "Log entry of a dispatched webhook payload and response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log identifier" },
+        "shopId": { "type": "string", "description": "Associated shop ID" },
+        "webhookId": { "type": "string", "description": "Target webhook identifier" },
+        "event": { "type": "string", "description": "Dispatched event name" },
+        "url": { "type": "string", "description": "Target URL" },
+        "status": { "type": "string", "description": "SUCCESS or FAILED status" },
+        "responseCode": { "type": "integer", "description": "HTTP status code" },
+        "responseBody": { "type": "string", "description": "Truncated HTTP response body" },
+        "latencyMs": { "type": "integer", "description": "Execution latency in milliseconds" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of attempt" },
+        "errorMessage": { "type": "string", "description": "Optional error details" }
+      },
+      "required": ["id", "shopId", "webhookId", "event", "url", "status", "responseCode", "latencyMs", "createdAt"]
     }
   },
   "firestore": {
@@ -151,6 +188,14 @@
     "/ticket_counters/{counterId}": {
       "schema": "TicketCounter",
       "description": "Atomic daily ticket counters per shop"
+    },
+    "/webhooks/{webhookId}": {
+      "schema": "Webhook",
+      "description": "Configured webhook endpoints"
+    },
+    "/webhook_logs/{logId}": {
+      "schema": "WebhookLog",
+      "description": "Delivery logs for webhooks"
     }
   }
 }

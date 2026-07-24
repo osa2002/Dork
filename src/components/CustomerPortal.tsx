@@ -7,6 +7,7 @@ import { useUiStore } from "../store";
 
 // Shared Utilities
 import { isShopClosed } from "../lib/shopUtils";
+import { getAppOrigin } from "../lib/originUtils";
 
 // Custom hooks
 import { useCustomerShop } from "../hooks/useCustomerShop";
@@ -264,7 +265,7 @@ export default function CustomerPortal({
 
   const getDirectTicketUrl = () => {
     if (!myTicket || !shop) return "";
-    return `${window.location.origin}/?shop=${shop.slug}&ticketId=${myTicket.id}`;
+    return `${getAppOrigin()}/?shop=${shop.slug}&ticketId=${myTicket.id}`;
   };
 
   const handleCopyLink = () => {

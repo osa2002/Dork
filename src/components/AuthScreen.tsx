@@ -313,8 +313,18 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
         onAuthSuccess(uid);
       }
     } catch (err: any) {
-      console.error("Social login error:", err);
-      let localizedMsg = err.message;
+      const isPopupClosed = err?.code === "auth/popup-closed-by-user" || (typeof err?.message === "string" && err.message.includes("popup-closed-by-user"));
+      const isPopupBlocked = err?.code === "auth/popup-blocked" || (typeof err?.message === "string" && err.message.includes("popup-blocked"));
+
+      if (isPopupClosed) {
+        console.warn("Social login popup closed by user:", err?.message);
+      } else if (isPopupBlocked) {
+        console.warn("Social login popup blocked by browser:", err?.message);
+      } else {
+        console.error("Social login error:", err);
+      }
+
+      let localizedMsg = err?.message || "";
       
       // Parse JSON from FirestoreErrorInfo if thrown
       try {
@@ -333,10 +343,18 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
         // Fallback to normal error handling
       }
 
-      if (err.code === "auth/popup-closed-by-user") {
+      if (isPopupClosed) {
         localizedMsg = isRtl 
-          ? "تم إغلاق نافذة تسجيل الدخول قبل اكتمال العملية." 
-          : "The sign-in popup was closed before completing the process.";
+          ? "تم إغلاق نافذة تسجيل الدخول قبل اكتمال العملية. نظرًا لأن التطبيق يعمل داخل إطار (iframe) في معاينة AI Studio، قد تمنع قيود المتصفح أو مانع النوافذ المنبثقة إتمام العملية. يرجى محاولة فتح التطبيق في نافذة جديدة (Open in New Tab) باستخدام الرابط في الأعلى، أو السماح بالنوافذ المنبثقة، أو استخدام خيارات الدخول التجريبي بالأسفل." 
+          : "The sign-in popup was closed before completing the process. Since the app runs inside an iframe in the AI Studio preview, browser restrictions or popup blockers may prevent the login from completing. Please open the app in a new tab using the top-right button, allow popups/cookies, or use the pre-seeded demo logins below.";
+      } else if (isPopupBlocked) {
+        localizedMsg = isRtl
+          ? "تم حظر نافذة تسجيل الدخول المنبثقة بواسطة المتصفح. يرجى تفعيل النوافذ المنبثقة لهذا الموقع أو فتح التطبيق في نافذة جديدة."
+          : "The sign-in popup was blocked by the browser. Please allow popups for this site or open the app in a new tab.";
+      } else if (err.code === "auth/unauthorized-domain") {
+        localizedMsg = isRtl
+          ? "هذا النطاق غير مصرح به لتسجيل الدخول الاجتماعي في وحدة تحكم Firebase (Firebase Console). يرجى إضافة هذا النطاق إلى قائمة النطاقات المصرح بها في إعدادات Authentication."
+          : "This domain is not authorized for social login in the Firebase Console. Please add this domain to the Authorized Domains list in your Firebase Authentication settings.";
       } else if (err.code === "auth/account-exists-with-different-credential") {
         localizedMsg = isRtl
           ? "يوجد حساب مسجل بالفعل ببريد إلكتروني مطابق باستخدام طريقة دخول مختلفة."
@@ -532,9 +550,37 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs font-bold rounded-2xl flex items-start gap-2.5 text-start">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 text-rose-800 dark:text-rose-200 text-xs font-bold rounded-2xl flex items-start gap-2.5 text-start">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+              <div className="flex-1 space-y-1">
+                <span className="block">{error}</span>
+                
+                {(error.includes("popup") || error.includes("نافذة") || error.includes("closed before completing")) && (
+                  <div className="mt-3 pt-3 border-t border-rose-150 dark:border-rose-900/40 space-y-2">
+                    <p className="text-[11px] font-medium text-rose-700 dark:text-rose-300 leading-relaxed">
+                      {isRtl 
+                        ? "💡 لتخطي هذا القيد في بيئة معاينة AI Studio:"
+                        : "💡 To bypass this environment constraint in the AI Studio preview:"}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => window.open(window.location.href, "_blank")}
+                        className="flex-1 bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-900 dark:text-rose-100 text-[10px] font-black py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <span>🚀 {isRtl ? "فتح في نافذة مستقلة" : "Open in New Tab"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDemoLogin}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-indigo-150"
+                      >
+                        <span>⚡ {isRtl ? "دخول سريع كحساب تجريبي" : "Fast Demo Login"}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -675,6 +721,16 @@ export default function AuthScreen({ onAuthSuccess, onBackToHome, isDarkMode, se
 
           {/* Social Auth Buttons */}
           <div className="space-y-2.5">
+            {window.self !== window.top && (
+              <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100/50 dark:border-amber-900/30 rounded-2xl p-3 text-center mb-2">
+                <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold block leading-relaxed">
+                  {isRtl 
+                    ? "💡 تنبيه: لتسجيل الدخول الاجتماعي داخل معاينة AI Studio، يرجى فتح التطبيق في نافذة مستقلة (Open in New Tab) أو استخدام الدخول السريع." 
+                    : "💡 Note: For social logins inside the AI Studio preview, please open the app in a new tab or use the quick-access demo environments below."}
+                </span>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => handleSocialLogin("google")}

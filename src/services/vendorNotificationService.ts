@@ -1,28 +1,35 @@
-export const vendorNotificationService = {
+// ---------------------------------------------------------------------------
+// Client-Side Browser Notifications (Singleton Instance)
+// ---------------------------------------------------------------------------
+
+class VendorNotificationService {
   isSupported(): boolean {
     return typeof window !== "undefined" && "Notification" in window;
-  },
+  }
 
   getPermission(): NotificationPermission {
-    return this.isSupported() ? Notification.permission : "denied";
-  },
+    if (!this.isSupported()) return "default";
+    return Notification.permission;
+  }
 
   async requestPermission(): Promise<NotificationPermission> {
-    if (!this.isSupported()) return "denied";
+    if (!this.isSupported()) return "default";
     return await Notification.requestPermission();
-  },
+  }
 
-  sendNotification(title: string, body: string, iconUrl?: string): void {
-    if (!this.isSupported()) return;
-    if (Notification.permission === "granted") {
-      try {
-        new Notification(title, {
-          body,
-          icon: iconUrl || "/logo.png"
-        });
-      } catch (err: any) {
-        console.warn("Notification instantiation failed on this device:", err.message);
-      }
+  sendNotification(title: string, body: string, iconUrl?: string) {
+    if (!this.isSupported() || this.getPermission() !== "granted") {
+      return;
+    }
+    try {
+      new Notification(title, {
+        body,
+        icon: iconUrl,
+      });
+    } catch (e) {
+      console.error("Failed to send browser notification:", e);
     }
   }
-};
+}
+
+export const vendorNotificationService = new VendorNotificationService();

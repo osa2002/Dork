@@ -180,3 +180,148 @@ body {
   background-image: radial-gradient(circle at left, transparent 12px, white 13px),
                     radial-gradient(circle at right, transparent 12px, white 13px);
 }
+
+/* Printable thermal receipt styling */
+@media screen {
+  .thermal-receipt {
+    display: none !important;
+  }
+}
+
+@media print {
+  /* Hide the screen-based app elements */
+  #root, .no-print, [id^="btn-print-"], iframe {
+    display: none !important;
+  }
+
+  /* Target body and layout resets for standard margins */
+  body, html {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Thermal Receipt Container optimized for 80mm/58mm rolls */
+  .thermal-receipt {
+    display: block !important;
+    width: 76mm !important; /* Standard printable area inside 80mm roll */
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4mm 2mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+  }
+
+  .thermal-receipt * {
+    background: transparent !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .receipt-header {
+    margin-bottom: 2mm;
+  }
+
+  .receipt-shop-name {
+    font-size: 14px !important;
+    font-weight: bold !important;
+    margin: 0 0 1mm 0 !important;
+  }
+
+  .receipt-shop-sub {
+    font-size: 10px !important;
+    margin: 0 0 1mm 0 !important;
+  }
+
+  .receipt-time {
+    font-size: 10px !important;
+    margin: 0 !important;
+  }
+
+  .receipt-divider {
+    font-size: 11px !important;
+    letter-spacing: -0.5px !important;
+    margin: 1.5mm 0 !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  .receipt-ticket-info {
+    padding: 2mm 0 !important;
+  }
+
+  .receipt-label {
+    font-size: 10px !important;
+    text-transform: uppercase !important;
+    display: block !important;
+  }
+
+  .receipt-number {
+    font-size: 38px !important;
+    font-weight: 900 !important;
+    margin: 1mm 0 !important;
+    line-height: 1 !important;
+  }
+
+  .receipt-priority {
+    font-size: 10px !important;
+    font-weight: bold !important;
+    margin-top: 1mm !important;
+  }
+
+  .receipt-details {
+    text-align: left !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    padding: 1mm 2mm !important;
+  }
+
+  /* Handle RTL support for details block during print */
+  [dir="rtl"] .receipt-details {
+    text-align: right !important;
+  }
+
+  .receipt-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-bottom: 1mm !important;
+  }
+
+  .receipt-row-label {
+    font-weight: bold !important;
+  }
+
+  .receipt-row-value {
+    font-weight: normal !important;
+    text-align: right !important;
+  }
+
+  [dir="rtl"] .receipt-row-value {
+    text-align: left !important;
+  }
+
+  .receipt-footer {
+    margin-top: 3mm !important;
+  }
+
+  .receipt-greeting {
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+    margin: 0 0 2mm 0 !important;
+  }
+
+  .receipt-url {
+    font-size: 8px !important;
+    margin: 0 !important;
+    word-break: break-all !important;
+  }
+}

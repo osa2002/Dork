@@ -1,36 +1,21 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
-import nodemailer from "nodemailer";
 import fs from "fs";
+import crypto from "crypto";
 import Stripe from "stripe";
 import { GoogleGenAI, Type } from "@google/genai";
-import { initializeApp, applicationDefault } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { getHealth, getReady, getLive, getVersion, getMetrics, getFeatureFlags } from "./src/controllers/observabilityController";
+import observabilityRouter from "./src/routes/observabilityRoutes";
+import governanceRouter from "./src/routes/governanceRoutes";
+import messagingRouter from "./src/routes/messagingRoutes";
+import { adminRouter } from "./server/admin/routes/adminRoutes";
+import { sendWelcomeNotificationsOnServer } from "./src/services/serverNotificationService";
 import { AuditLogService } from "./src/services/AuditLogService";
 import { SLOService } from "./src/services/SLOService";
-import {
-  getAuditLogs,
-  createAuditLog,
-  getIncidents,
-  createIncident,
-  resolveIncident,
-  addIncidentTimeline,
-  getSLOStatus,
-  getDisasterRecoveryStatus,
-  simulateRecovery,
-  verifyBackups,
-  getRunbooks,
-  getRetentionPolicy,
-  updateRetentionPolicy,
-  getGovernanceSummary
-} from "./src/controllers/governanceController";
 import { observabilityMiddleware } from "./src/middlewares/observabilityMiddleware";
 import { ConfigValidator } from "./src/services/ConfigValidator";
 import { ShutdownManager } from "./src/services/ShutdownManager";
@@ -52,54 +37,12 @@ import {
   RateLimitError
 } from "./src/errors/CustomErrors";
 import {
-  sendEmailSchema,
-  sendFcmSchema,
   estimateWaitTimeSchema,
   analyzeQueueSchema,
   createTicketSchema,
   createCheckoutSessionSchema,
   verifySessionSchema
 } from "./src/schemas/apiSchemas";
-
-let firebaseAdminApp: any = null;
-let firestoreDatabaseId: string | undefined = undefined;
-
-function initializeFirebaseAdmin() {
-  if (firebaseAdminApp) return;
-
-  let projectId: string | undefined = undefined;
-
-  try {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-      projectId = config.projectId;
-      firestoreDatabaseId = config.firestoreDatabaseId;
-      console.log("[Firebase Admin] Loaded config:", { projectId, firestoreDatabaseId });
-    }
-  } catch (err: any) {
-    console.warn("[Firebase Admin] Failed to parse firebase-applet-config.json:", err.message);
-  }
-
-  try {
-    // Attempt standard initialization using environment variables or applicationDefault
-    firebaseAdminApp = initializeApp({
-      projectId: projectId,
-      credential: applicationDefault()
-    });
-    console.log("[Firebase Admin] Initialized successfully with Application Default Credentials");
-  } catch (err: any) {
-    console.warn("[Firebase Admin] Failed to initialize with applicationDefault(), attempting fallback:", err.message);
-    try {
-      firebaseAdminApp = initializeApp({
-        projectId: projectId
-      });
-      console.log("[Firebase Admin] Initialized with fallback config");
-    } catch (err2: any) {
-      console.warn("[Firebase Admin] Direct initialization failed:", err2.message);
-    }
-  }
-}
 
 function getStartOfTodayInTimezone(timezone: string): string {
   try {
@@ -160,6 +103,7 @@ async function startServer() {
   }
 
   const app = express();
+  app.set("trust proxy", 1);
   const PORT = 3000;
 
   // 1. Enable standard CORS middleware
@@ -238,28 +182,26 @@ async function startServer() {
   );
 
   // Observability, Metrics & Enterprise Health Endpoints (Phase 6.1)
-  app.get("/health", getHealth);
-  app.get("/ready", getReady);
-  app.get("/live", getLive);
-  app.get("/version", getVersion);
-  app.get("/api/metrics", getMetrics);
-  app.get("/api/features", getFeatureFlags);
+  app.use(observabilityRouter);
+
+  // Chaos Engineering Control Endpoints
+  try {
+    const { ChaosController } = await import("./server/chaos/ChaosController");
+    app.get("/api/chaos/state", ChaosController.getState);
+    app.get("/api/chaos/intelligence", ChaosController.getIntelligence);
+    app.get("/api/chaos/governance", ChaosController.getGovernance);
+    app.get("/api/chaos/eventbus", ChaosController.getEventBus);
+    app.post("/api/chaos/configure", ChaosController.configure);
+    app.post("/api/chaos/reset", ChaosController.reset);
+  } catch (err) {
+    console.warn("[Chaos Module] Failed to mount Chaos routes:", err);
+  }
 
   // Enterprise Governance, Audit Logging & Disaster Recovery Backend Endpoints (Phase 6.1)
-  app.get("/api/governance/summary", getGovernanceSummary);
-  app.get("/api/governance/audit-logs", getAuditLogs);
-  app.post("/api/governance/audit-logs", createAuditLog);
-  app.get("/api/governance/incidents", getIncidents);
-  app.post("/api/governance/incidents", createIncident);
-  app.post("/api/governance/incidents/:id/resolve", resolveIncident);
-  app.post("/api/governance/incidents/:id/timeline", addIncidentTimeline);
-  app.get("/api/governance/slo", getSLOStatus);
-  app.get("/api/governance/disaster-recovery", getDisasterRecoveryStatus);
-  app.post("/api/governance/disaster-recovery/simulate", simulateRecovery);
-  app.post("/api/governance/disaster-recovery/verify-backups", verifyBackups);
-  app.get("/api/governance/runbooks", getRunbooks);
-  app.get("/api/governance/retention", getRetentionPolicy);
-  app.post("/api/governance/retention", updateRetentionPolicy);
+  app.use(governanceRouter);
+
+  // Enterprise Platform Administration Module (Isolated Architecture)
+  app.use("/api/v1/admin", adminRouter);
 
   // 3. API Rate Limiting to prevent denial-of-wallet and abuse
   const apiLimiter = rateLimit({
@@ -267,6 +209,7 @@ async function startServer() {
     max: 200, // Limit each IP to 200 requests per 15 minutes
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false },
     message: {
       status: 429,
       error: "Too many requests from this IP, please try again later."
@@ -276,320 +219,38 @@ async function startServer() {
 
   app.use(express.json());
   app.use(correlationIdMiddleware);
+
+  // Mount Chaos Middleware safely under env and auth guards (TASK 2)
+  try {
+    const { chaosMiddleware } = await import("./server/chaos/ChaosMiddleware");
+    app.use(chaosMiddleware);
+  } catch (err) {
+    console.warn("[Chaos Module] Failed to mount Chaos Middleware:", err);
+  }
+
+  // Monkeypatch MetricsService to include Chaos Metrics dynamically (TASK 9)
+  try {
+    const { MetricsService: MS } = await import("./src/services/MetricsService");
+    const { ChaosState: CS } = await import("./server/chaos/ChaosState");
+    const originalGetCounts = MS.getCounts;
+    MS.getCounts = function () {
+      const counts = originalGetCounts.call(MS);
+      return {
+        ...counts,
+        chaos_events_total: CS.getMetric("chaos_events_total"),
+        chaos_events_success: CS.getMetric("chaos_events_success"),
+        chaos_events_failed: CS.getMetric("chaos_events_failed"),
+        chaos_latency_added: CS.getMetric("chaos_latency_added"),
+        chaos_probability_hits: CS.getMetric("chaos_probability_hits"),
+      };
+    };
+  } catch (err) {
+    console.warn("[Chaos Module] Failed to monkey-patch MetricsService:", err);
+  }
+
   app.use(observabilityMiddleware);
 
-  // API Route to send email
-  app.post("/api/send-email", validateRequest(sendEmailSchema), async (req, res, next) => {
-    const { email, name, ticketNumber, serviceName, shopName, lang } = req.body;
-
-    const isAr = lang === "ar";
-    const smtpSpan = TelemetryService.startSpan("smtp:sendMail");
-    smtpSpan.setAttribute("mail.to", email);
-
-    try {
-      let transporter;
-
-      // Use SMTP environment variables if provided
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-        transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT || "587"),
-          secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
-      } else {
-        // Fallback: Create ethereal test account for testing
-        const testAccount = await nodemailer.createTestAccount();
-        transporter = nodemailer.createTransport({
-          host: "smtp.ethereal.email",
-          port: 587,
-          secure: false,
-          auth: {
-            user: testAccount.user,
-            pass: testAccount.pass,
-          },
-        });
-        console.log("Created ephemeral Ethereal SMTP test account:", testAccount.user);
-      }
-
-      const subject = isAr
-        ? `اقترب دورك في ${shopName}! (تذكرة رقم ${ticketNumber})`
-        : `Your turn is approaching at ${shopName}! (Ticket #${ticketNumber})`;
-
-      const fromName = isAr ? "طابور دورك الرقمي" : "Dork Digital Queue";
-      const fromEmail = process.env.SMTP_FROM || "noreply@dorkqueue.com";
-
-      const htmlContent = isAr
-        ? `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; text-align: right; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-            <div style="background-color: #4f46e5; padding: 15px; border-radius: 12px; text-align: center; color: white;">
-              <h2 style="margin: 0; font-size: 20px;">اقترب دورك في ${shopName}!</h2>
-            </div>
-            <div style="padding: 20px; color: #1e293b; line-height: 1.6;">
-              <p style="font-size: 16px; font-weight: bold;">مرحباً ${name}،</p>
-              <p>يسعدنا إبلاغك بأن دورك في <strong>${shopName}</strong> قد اقترب!</p>
-              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin: 20px 0; text-align: center;">
-                <span style="font-size: 12px; color: #64748b; font-weight: bold; display: block; margin-bottom: 5px;">رقم تذكرتك</span>
-                <span style="font-size: 32px; font-weight: 900; color: #4f46e5; display: block; margin-bottom: 5px;">#${ticketNumber}</span>
-                <span style="font-size: 14px; font-weight: bold; color: #334155;">الخدمة: ${serviceName}</span>
-              </div>
-              <p style="font-weight: bold; color: #e11d48; text-align: center; font-size: 16px;">يتبقى الآن شخصان فقط أمامك في طابور الانتظار.</p>
-              <p>يرجى التوجه إلى المحل فوراً لضمان عدم فوات دورك أو إلغاء تذكرتك.</p>
-            </div>
-            <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
-            <div style="text-align: center; color: #64748b; font-size: 11px;">
-              <p>تم إرسال هذا التنبيه التلقائي بواسطة نظام إدارة الطوابير الذكي.</p>
-            </div>
-          </div>
-        `
-        : `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: left; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-            <div style="background-color: #4f46e5; padding: 15px; border-radius: 12px; text-align: center; color: white;">
-              <h2 style="margin: 0; font-size: 20px;">Your turn is approaching at ${shopName}!</h2>
-            </div>
-            <div style="padding: 20px; color: #1e293b; line-height: 1.6;">
-              <p style="font-size: 16px; font-weight: bold;">Hello ${name},</p>
-              <p>We are pleased to inform you that your turn at <strong>${shopName}</strong> is approaching!</p>
-              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin: 20px 0; text-align: center;">
-                <span style="font-size: 12px; color: #64748b; font-weight: bold; display: block; margin-bottom: 5px;">Your Ticket Number</span>
-                <span style="font-size: 32px; font-weight: 900; color: #4f46e5; display: block; margin-bottom: 5px;">#${ticketNumber}</span>
-                <span style="font-size: 14px; font-weight: bold; color: #334155;">Service: ${serviceName}</span>
-              </div>
-              <p style="font-weight: bold; color: #e11d48; text-align: center; font-size: 16px;">There are now exactly 2 people ahead of you in the queue.</p>
-              <p>Please head to the shop immediately to ensure you don't miss your turn.</p>
-            </div>
-            <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
-            <div style="text-align: center; color: #64748b; font-size: 11px;">
-              <p>This automated alert was sent by the Dork Digital Queue management system.</p>
-            </div>
-          </div>
-        `;
-
-      const mailOptions = {
-        from: `"${fromName}" <${fromEmail}>`,
-        to: email,
-        subject: subject,
-        html: htmlContent,
-      };
-
-      const info = await transporter.sendMail(mailOptions);
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-
-      console.log(`Email sent successfully to ${email}. Message ID: ${info.messageId}`);
-      if (previewUrl) {
-        console.log(`Email Test Preview URL: ${previewUrl}`);
-      }
-
-      smtpSpan.end();
-      MetricsService.recordNotificationOutcome(true);
-
-      return res.status(200).json({
-        success: true,
-        messageId: info.messageId,
-        previewUrl: previewUrl || null,
-      });
-    } catch (err: any) {
-      smtpSpan.setAttribute("error", true);
-      smtpSpan.setAttribute("error.message", err.message);
-      smtpSpan.end();
-      MetricsService.recordNotificationOutcome(false);
-      next(err);
-    }
-  });
-
-  // Phone number normalization helper
-  function normalizePhoneNumber(phone: string): string {
-    let cleaned = phone.replace(/[^\d+]/g, ""); // Keep only digits and +
-    if (!cleaned) return "";
-
-    // If it starts with 00, replace with +
-    if (cleaned.startsWith("00")) {
-      cleaned = "+" + cleaned.substring(2);
-    }
-
-    // Saudi number normalization
-    if (cleaned.startsWith("05") && cleaned.length === 10) {
-      cleaned = "+966" + cleaned.substring(1);
-    } else if (cleaned.startsWith("5") && cleaned.length === 9) {
-      cleaned = "+966" + cleaned;
-    }
-
-    // Ensure it has a leading plus
-    if (!cleaned.startsWith("+")) {
-      cleaned = "+" + cleaned;
-    }
-
-    return cleaned;
-  }
-
-  // Get localized SMS/WhatsApp text templates
-  function getNotificationMessage(type: "welcome" | "approaching", params: {
-    name: string;
-    ticketNumber: string;
-    serviceName: string;
-    shopName: string;
-    trackingUrl?: string;
-    lang: "ar" | "en";
-  }): string {
-    const isAr = params.lang === "ar";
-    if (type === "welcome") {
-      return isAr
-        ? `مرحباً ${params.name}، لقد تم حجز تذكرتك رقم #${params.ticketNumber} بنجاح لخدمة ${params.serviceName} لدى ${params.shopName}. يمكنك متابعة حالة الطابور مباشرة من الرابط التالي: ${params.trackingUrl || ""}`
-        : `Hello ${params.name}, your ticket #${params.ticketNumber} has been successfully booked for ${params.serviceName} at ${params.shopName}. You can track your queue status live here: ${params.trackingUrl || ""}`;
-    } else {
-      return isAr
-        ? `تنبيه من ${params.shopName}: دورك يقترب! يرجى التوجه إلى شباك الخدمة، يتبقى شخصان فقط أمامك في الطابور لحامل التذكرة رقم #${params.ticketNumber}.`
-        : `Alert from ${params.shopName}: Your turn is approaching! Please head to the service window, only 2 people are ahead of you in the queue for ticket #${params.ticketNumber}.`;
-    }
-  }
-
-  // Direct Twilio sender helper (handles both real Twilio API and offline/fallback logs)
-  async function triggerTwilioSendDirect(phone: string, bodyText: string, isWhatsapp: boolean) {
-    const toPhone = normalizePhoneNumber(phone);
-    if (!toPhone) return;
-
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
-    const twilioWA = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
-
-    const twilioSpan = TelemetryService.startSpan("twilio:sendDirect");
-    twilioSpan.setAttribute("twilio.to", toPhone);
-    twilioSpan.setAttribute("twilio.is_whatsapp", isWhatsapp);
-
-    if (!accountSid || !authToken) {
-      console.log(`[Twilio Simulation] Simulated Direct Send to ${toPhone} via ${isWhatsapp ? "WhatsApp" : "SMS"}: "${bodyText}"`);
-      twilioSpan.setAttribute("twilio.simulated", true);
-      twilioSpan.end();
-      return { simulated: true, recipient: toPhone, body: bodyText };
-    }
-
-    const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
-    const fromNumber = isWhatsapp ? (twilioWA.startsWith("whatsapp:") ? twilioWA : `whatsapp:${twilioWA}`) : twilioPhone;
-    const toNumber = isWhatsapp ? (toPhone.startsWith("whatsapp:") ? toPhone : `whatsapp:${toPhone}`) : toPhone;
-
-    if (!fromNumber) {
-      console.warn(`[Twilio Warning] Missing sender phone number for ${isWhatsapp ? "WhatsApp" : "SMS"}. Falling back to simulation.`);
-      twilioSpan.setAttribute("twilio.simulated", true);
-      twilioSpan.setAttribute("twilio.warning", "Missing sender phone number");
-      twilioSpan.end();
-      return { simulated: true, recipient: toPhone, body: bodyText };
-    }
-
-    try {
-      const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            From: fromNumber,
-            To: toNumber,
-            Body: bodyText,
-          }),
-        }
-      );
-
-      const data: any = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || `Twilio error status ${response.status}`);
-      }
-
-      console.log(`[Twilio Direct Send Success] Message Sid: ${data.sid}`);
-      twilioSpan.setAttribute("twilio.sid", data.sid);
-      twilioSpan.end();
-      MetricsService.recordNotificationOutcome(true);
-      return { success: true, sid: data.sid, recipient: toPhone };
-    } catch (err: any) {
-      console.error(`[Twilio Direct Send Error] Failed to send message directly:`, err.message);
-      twilioSpan.setAttribute("error", true);
-      twilioSpan.setAttribute("error.message", err.message);
-      twilioSpan.end();
-      MetricsService.recordNotificationOutcome(false);
-      return { simulated: true, recipient: toPhone, body: bodyText, warning: err.message };
-    }
-  }
-
-  // Auto-send welcome notifications on ticket booking
-  async function sendWelcomeNotificationsOnServer(ticket: any, shopName: string, shopSlug: string, origin: string, lang: string) {
-    const phone = ticket.customerPhone;
-    if (!phone) return;
-
-    const trackingUrl = `${origin}/?shop=${shopSlug}&ticketId=${ticket.id}`;
-    const language = lang === "ar" ? "ar" : "en";
-
-    if (ticket.smsNotify) {
-      try {
-        const bodyText = getNotificationMessage("welcome", {
-          name: ticket.customerName,
-          ticketNumber: String(ticket.ticketNumber).padStart(2, "0"),
-          serviceName: ticket.serviceName,
-          shopName: shopName,
-          trackingUrl: trackingUrl,
-          lang: language,
-        });
-        console.log(`[Server Welcome SMS] Triggering welcome SMS to ${phone}`);
-        await triggerTwilioSendDirect(phone, bodyText, false);
-      } catch (err) {
-        console.error("[Server Welcome SMS Error]", err);
-      }
-    }
-
-    if (ticket.whatsappNotify) {
-      try {
-        const bodyText = getNotificationMessage("welcome", {
-          name: ticket.customerName,
-          ticketNumber: String(ticket.ticketNumber).padStart(2, "0"),
-          serviceName: ticket.serviceName,
-          shopName: shopName,
-          trackingUrl: trackingUrl,
-          lang: language,
-        });
-        console.log(`[Server Welcome WhatsApp] Triggering welcome WhatsApp to ${phone}`);
-        await triggerTwilioSendDirect(phone, bodyText, true);
-      } catch (err) {
-        console.error("[Server Welcome WhatsApp Error]", err);
-      }
-    }
-  }
-
-  // Unified Omnichannel API endpoint
-  app.post("/api/send-sms-whatsapp", async (req, res) => {
-    const { phone, messageType, channel, name, ticketNumber, serviceName, shopName, trackingUrl, lang } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({ error: "Phone number is required." });
-    }
-
-    const toPhone = normalizePhoneNumber(phone);
-    if (!toPhone) {
-      return res.status(400).json({ error: "Invalid phone number format." });
-    }
-
-    const isAr = lang === "ar";
-    const bodyText = getNotificationMessage(messageType || "welcome", {
-      name: name || "Customer",
-      ticketNumber: String(ticketNumber || ""),
-      serviceName: serviceName || "Service",
-      shopName: shopName || "Shop",
-      trackingUrl: trackingUrl || "",
-      lang: isAr ? "ar" : "en",
-    });
-
-    const isWhatsapp = channel === "whatsapp";
-    const result = await triggerTwilioSendDirect(toPhone, bodyText, isWhatsapp);
-    return res.status(200).json({
-      success: true,
-      ...result,
-      channel,
-    });
-  });
+  app.use(messagingRouter);
 
   // Secure ticket creation & plan validation endpoint
   app.post("/api/tickets/create", validateRequest(createTicketSchema), async (req, res, next) => {
@@ -687,49 +348,7 @@ async function startServer() {
     }
   });
 
-  // Send FCM instant notification when 1 person is left
-  app.post("/api/send-fcm-alert", validateRequest(sendFcmSchema), async (req, res, next) => {
-    const { fcmToken, shopName, ticketNumber, lang } = req.body;
 
-    const isAr = lang === "ar";
-    const title = isAr
-      ? "تنبيه هام من دورك! 🔔"
-      : "Important Alert from Dork! 🔔";
-    const body = isAr
-      ? `يتبقى شخص واحد فقط أمامك في طابور الانتظار لدى ${shopName || "المحل"}. يرجى التوجه فوراً!`
-      : `Only 1 person is left ahead of you in the queue at ${shopName || "the shop"}. Please head there immediately!`;
-
-    console.log(`[FCM] Attempting to send FCM notification to token ${fcmToken.substring(0, 10)}...: "${title}" - "${body}"`);
-
-    try {
-      initializeFirebaseAdmin();
-      const messagingService = getMessaging();
-
-      const message = {
-        notification: {
-          title: title,
-          body: body,
-        },
-        token: fcmToken,
-      };
-
-      const response = await messagingService.send(message);
-      console.log("[FCM] Successfully sent message via FCM:", response);
-      MetricsService.recordNotificationOutcome(true);
-      return res.status(200).json({ success: true, messageId: response });
-    } catch (err: any) {
-      console.log("[FCM] Real FCM sending unconfigured or lacks permission. Falling back to simulated delivery.");
-      MetricsService.recordNotificationOutcome(true); // Treat sandbox simulation as successful outcome in fallback mode
-
-      return res.status(200).json({
-        success: true,
-        simulated: true,
-        message: "FCM configuration simulated successfully. Real sending requires service account credentials in .env.",
-        title,
-        body
-      });
-    }
-  });
 
   // AI Estimated Wait Time Endpoint
   app.post("/api/estimate-wait-time", validateRequest(estimateWaitTimeSchema), async (req, res, next) => {
@@ -1055,6 +674,169 @@ Make it a concise 2-3 paragraph summary focusing on staffing level recommendatio
     } catch (err) {
       console.error("[Gemini API Error] ai-diagnose fallback triggered:", err);
       return res.json({ analysis: getFallbackAnalysis() });
+    }
+  });
+
+  // --- Webhooks Proxy & Testing Endpoints ---
+  app.post("/api/webhooks/test", async (req, res) => {
+    const { url, secret, headers, event, samplePayload } = req.body;
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, error: "Valid target URL is required" });
+    }
+
+    const payload = samplePayload || {
+      event: event || "ticket.created",
+      timestamp: new Date().toISOString(),
+      shop: { id: "shop_demo_101", name: "Demo Queue Shop" },
+      ticket: {
+        id: "tkt_test_999",
+        ticketNumber: 101,
+        customerName: "Jane Doe (Test)",
+        customerPhone: "+1234567890",
+        customerEmail: "jane@example.com",
+        serviceName: "Customer Support",
+        status: "waiting",
+        counterNumber: "Desk 1",
+        createdAt: new Date().toISOString()
+      },
+      isTest: true
+    };
+
+    const deliveryId = "del_" + Math.random().toString(36).substring(2, 12);
+    const payloadStr = JSON.stringify(payload);
+
+    const reqHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "Dork-Webhook-Agent/1.0",
+      "X-Dork-Event": event || "ticket.created",
+      "X-Dork-Delivery": deliveryId
+    };
+
+    if (secret && typeof secret === "string" && secret.trim() !== "") {
+      const hmac = crypto.createHmac("sha256", secret.trim());
+      hmac.update(payloadStr);
+      reqHeaders["X-Dork-Signature"] = `sha256=${hmac.digest("hex")}`;
+    }
+
+    if (Array.isArray(headers)) {
+      headers.forEach((h: any) => {
+        if (h && h.key && h.value) {
+          reqHeaders[h.key] = h.value;
+        }
+      });
+    }
+
+    const startMs = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: reqHeaders,
+        body: payloadStr,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const durationMs = Date.now() - startMs;
+      const respText = await response.text();
+      const responseSummary = respText.substring(0, 300) || `HTTP ${response.status} ${response.statusText}`;
+
+      return res.status(200).json({
+        success: response.ok,
+        statusCode: response.status,
+        durationMs,
+        responseSummary,
+        deliveryId,
+        headersSent: reqHeaders,
+        payloadSent: payload
+      });
+    } catch (err: any) {
+      const durationMs = Date.now() - startMs;
+      return res.status(200).json({
+        success: false,
+        statusCode: 0,
+        durationMs,
+        responseSummary: err.name === "AbortError" ? "Request timed out after 10000ms" : (err.message || "Connection refused"),
+        deliveryId,
+        headersSent: reqHeaders,
+        payloadSent: payload
+      });
+    }
+  });
+
+  app.post("/api/webhooks/dispatch", async (req, res) => {
+    const { url, secret, headers, event, payload, shopId } = req.body;
+
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, error: "Valid target URL is required" });
+    }
+
+    const deliveryId = "del_" + Math.random().toString(36).substring(2, 12);
+    const finalPayload = {
+      event: event || "ticket.created",
+      timestamp: new Date().toISOString(),
+      shopId,
+      ...payload
+    };
+    const payloadStr = JSON.stringify(finalPayload);
+
+    const reqHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "Dork-Webhook-Agent/1.0",
+      "X-Dork-Event": event || "ticket.created",
+      "X-Dork-Delivery": deliveryId
+    };
+
+    if (secret && typeof secret === "string" && secret.trim() !== "") {
+      const hmac = crypto.createHmac("sha256", secret.trim());
+      hmac.update(payloadStr);
+      reqHeaders["X-Dork-Signature"] = `sha256=${hmac.digest("hex")}`;
+    }
+
+    if (Array.isArray(headers)) {
+      headers.forEach((h: any) => {
+        if (h && h.key && h.value) {
+          reqHeaders[h.key] = h.value;
+        }
+      });
+    }
+
+    const startMs = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: reqHeaders,
+        body: payloadStr,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const durationMs = Date.now() - startMs;
+      const respText = await response.text();
+      const responseSummary = respText.substring(0, 300) || `HTTP ${response.status} ${response.statusText}`;
+
+      return res.status(200).json({
+        success: response.ok,
+        statusCode: response.status,
+        durationMs,
+        responseSummary,
+        deliveryId
+      });
+    } catch (err: any) {
+      const durationMs = Date.now() - startMs;
+      return res.status(200).json({
+        success: false,
+        statusCode: 0,
+        durationMs,
+        responseSummary: err.name === "AbortError" ? "Request timed out after 10000ms" : (err.message || "Connection failed"),
+        deliveryId
+      });
     }
   });
 

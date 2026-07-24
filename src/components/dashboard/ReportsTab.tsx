@@ -4,7 +4,8 @@ import {
   AreaChart, Area, CartesianGrid, Legend 
 } from "recharts";
 import { 
-  TrendingUp, Download, Loader2, Award, Zap, BrainCircuit, AlertCircle, HelpCircle, FileSpreadsheet, Star
+  TrendingUp, Download, Loader2, Award, Zap, BrainCircuit, AlertCircle, HelpCircle, FileSpreadsheet, Star,
+  Database, RefreshCw, CheckCircle2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Ticket } from "../../types";
@@ -65,6 +66,27 @@ export function ReportsTab({
   isRtl
 }: ReportsTabProps) {
   const { t } = useTranslation();
+
+  const [cleanupLoading, setCleanupLoading] = React.useState(false);
+  const [cleanupResult, setCleanupResult] = React.useState<{ success: boolean; archived: number; error?: string } | null>(null);
+
+  const handleTriggerCleanup = async () => {
+    setCleanupLoading(true);
+    setCleanupResult(null);
+    try {
+      const response = await fetch("/api/cron/cleanup", { method: "POST" });
+      const data = await response.json();
+      if (response.ok) {
+        setCleanupResult({ success: true, archived: data.archived || 0 });
+      } else {
+        setCleanupResult({ success: false, archived: 0, error: data.message || "Failed to execute cleanup." });
+      }
+    } catch (err: any) {
+      setCleanupResult({ success: false, archived: 0, error: err.message || "Network error while running database sweep." });
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in animate-duration-200" id="reports-tab">
@@ -239,7 +261,9 @@ export function ReportsTab({
                       <span className="text-base">{prizeIcon}</span>
                       <div className="space-y-0.5">
                         <p className="font-black text-slate-800 dark:text-slate-200">{staff.name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Rank #{index + 1} • Active Operations</p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          {t("leaderboard_rank", "Rank #")}{index + 1} • {t("active_operations", "Active Operations")}
+                        </p>
                       </div>
                     </div>
 
@@ -317,15 +341,107 @@ export function ReportsTab({
           </div>
 
           <div className="border-t border-slate-800/80 pt-3 flex items-center justify-between text-[9px] text-slate-400">
-            <span>Powered by Gemini API</span>
+            <span>{t("powered_by_gemini", "Powered by Gemini API")}</span>
             <span className="flex items-center gap-1">
               <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
-              <span>Diagnostic advice is advisor grade</span>
+              <span>{t("diagnostic_advice_grade", "Diagnostic advice is advisor grade")}</span>
             </span>
           </div>
         </div>
 
       </div>
+
+      {/* Database Performance & Queue Archiving Control Panel */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 rounded-3xl shadow-sm space-y-6" id="db-optimizer-panel">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+              <Database className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="space-y-1 text-start">
+              <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                {t("db_optimizer_title", "Database & Queue Performance Optimizer")}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-2xl leading-normal font-medium">
+                {t("db_optimizer_desc", "Automatically sweep inactive and historical tickets into secure archives at the end of every business day. Keeping the active tables clean maximizes database responsiveness and optimizes billing operations.")}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleTriggerCleanup}
+            disabled={cleanupLoading}
+            className="self-start md:self-center bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs py-2.5 px-4 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/10 shrink-0"
+            id="btn-trigger-cleanup"
+          >
+            {cleanupLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            <span>{cleanupLoading ? t("db_cleaning", "Running Database Sweep...") : t("db_clean_now", "Run Sweep Now")}</span>
+          </button>
+        </div>
+
+        {/* Statuses or Feedback Alert */}
+        {cleanupResult && (
+          <div className={`p-4 rounded-2xl border text-xs leading-relaxed flex gap-3 ${
+            cleanupResult.success 
+              ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300"
+              : "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40 text-rose-800 dark:text-rose-300"
+          }`} id="db-cleanup-alert">
+            {cleanupResult.success ? (
+              <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4.5 h-4.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-1 text-start">
+              <p className="font-extrabold">
+                {cleanupResult.success 
+                  ? t("db_clean_success_title", "Sweep Completed Successfully!") 
+                  : t("db_clean_failed_title", "Sweep Execution Failed")}
+              </p>
+              <p className="font-medium">
+                {cleanupResult.success 
+                  ? t("db_clean_success_desc", `Successfully archived and removed ${cleanupResult.archived} inactive queue tickets from active tables into cold storage.`)
+                  : cleanupResult.error || t("db_clean_failed_desc", "An unexpected error occurred during database optimization.")}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Dual Strategies Explanation (Option 1 & Option 2) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-850 p-4 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md font-bold">
+                {t("strategy_1", "Option 1")}
+              </span>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                {t("cf_scheduler", "Firebase Cloud Function")}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed text-start font-medium">
+              {t("strategy_1_desc", "Fully serverless scheduled job. Uses Cloud Scheduler to run at 23:59 UTC every day, bypassing server runtimes entirely. Ready to deploy inside the /functions directory using 'firebase deploy --only functions'.")}
+            </p>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-850 p-4 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md font-bold">
+                {t("strategy_2", "Option 2")}
+              </span>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                {t("native_scheduler", "Container-Native Scheduler")}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed text-start font-medium">
+              {t("strategy_2_desc", "Built-in automatic runner. Spawns directly inside the Express container instance and runs background sweeps every 12 hours. Best for instant local/sandbox verification and single-instance deployments.")}
+            </p>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

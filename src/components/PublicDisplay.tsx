@@ -337,15 +337,36 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
     const shopsRef = collection(db, "shops");
     const q = query(shopsRef, where("slug", "==", shopSlug));
 
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(q, async (snapshot) => {
       if (!snapshot.empty) {
         const shopDoc = snapshot.docs[0];
         setShop({ id: shopDoc.id, ...shopDoc.data() } as Shop);
         setError("");
+        setLoading(false);
       } else {
+        // Fallback: Check if shopSlug is actually a display ID in 'displays' collection
+        try {
+          const displayDocRef = doc(db, "displays", shopSlug);
+          const displaySnap = await getDoc(displayDocRef);
+          if (displaySnap.exists()) {
+            const displayData = displaySnap.data();
+            if (displayData.shopId) {
+              const shopDocRef = doc(db, "shops", displayData.shopId);
+              const shopSnap = await getDoc(shopDocRef);
+              if (shopSnap.exists()) {
+                setShop({ id: shopSnap.id, ...shopSnap.data() } as Shop);
+                setError("");
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching display fallback:", err);
+        }
         setError(isRtl ? "المحل غير موجود." : "Shop not found.");
+        setLoading(false);
       }
-      setLoading(false);
     }, (err) => {
       console.error("Error fetching shop:", err);
       setError(isRtl ? "فشل تحميل معلومات المحل." : "Failed to load shop details.");
@@ -656,9 +677,25 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
   }
 
   // Filter queue states
-  const filteredTickets = tickets.filter(t => selectedServiceId === "all" || t.serviceId === selectedServiceId);
-  const currentCalling = filteredTickets.find(t => t.status === "calling");
-  const upcomingTickets = filteredTickets.filter(t => t.status === "waiting").slice(0, 4);
+  const filteredTickets = React.useMemo(() => {
+    return tickets.filter(t => selectedServiceId === "all" || t.serviceId === selectedServiceId);
+  }, [tickets, selectedServiceId]);
+
+  const currentCalling = React.useMemo(() => {
+    return filteredTickets.find(t => t.status === "calling");
+  }, [filteredTickets]);
+
+  const upcomingTickets = React.useMemo(() => {
+    return filteredTickets.filter(t => t.status === "waiting").slice(0, 4);
+  }, [filteredTickets]);
+
+  const publicWaitingCount = React.useMemo(() => {
+    return filteredTickets.filter(t => t.status === "waiting").length;
+  }, [filteredTickets]);
+
+  const publicCompletedCount = React.useMemo(() => {
+    return filteredTickets.filter(t => t.status === "completed").length;
+  }, [filteredTickets]);
 
   // Formatting helper for clock
   const formattedTime = currentTime.toLocaleTimeString(isRtl ? "ar-EG" : "en-US", {
@@ -1077,7 +1114,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
                   {t_display("next_in_queue", "NEXT IN QUEUE")}
                 </h3>
                 <span className="bg-slate-950 text-indigo-400 border border-indigo-900/60 font-black text-sm px-4 py-1.5 rounded-full">
-                  {filteredTickets.filter(t => t.status === "waiting").length} {t_display("waiting", "WAITING")}
+                  {publicWaitingCount} {t_display("waiting", "WAITING")}
                 </span>
               </div>
 
@@ -1146,7 +1183,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
               <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl text-center">
                 <span className="text-xs text-slate-500 font-black block uppercase tracking-wider">{t_display("completed_today", "COMPLETED TODAY")}</span>
                 <span className="text-xl font-black text-emerald-500 mt-1 block font-mono">
-                  {filteredTickets.filter(t => t.status === "completed").length}
+                  {publicCompletedCount}
                 </span>
               </div>
             </div>
@@ -1323,7 +1360,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
                   {t_display("next_in_queue", "Next in Queue")}
                 </h3>
                 <span className="bg-indigo-950 text-indigo-400 font-black text-xs px-2.5 py-1 rounded-lg">
-                  {filteredTickets.filter(t => t.status === "waiting").length} {t_display("waiting", "Waiting")}
+                  {publicWaitingCount} {t_display("waiting", "Waiting")}
                 </span>
               </div>
 
@@ -1397,7 +1434,7 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
               <div className="bg-slate-900 border border-slate-800/60 p-3 rounded-xl text-center">
                 <span className="text-[10px] text-slate-500 font-bold block uppercase">{t_display("completed_today", "Completed Today")}</span>
                 <span className="text-base font-black text-emerald-500 mt-0.5 block font-mono">
-                  {filteredTickets.filter(t => t.status === "completed").length}
+                  {publicCompletedCount}
                 </span>
               </div>
             </div>

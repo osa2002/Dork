@@ -1,20 +1,371 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 📋 الدليل التقني الشامل وهيكل النظام | Enterprise Queue Management System
+> **مستند مرجعي شامل للذكاء الاصطناعي (Kimi / Gemini) ومطوري الأنظمة لاستكمال وبناء ميزات جديدة على النظام.**
 
-# Run and deploy your AI Studio app
+مرحبًا بك في الدليل التقني التفصيلي للنظام. تم تصميم وتطوير هذا المشروع ليكون نظام إدارة طوابير انتظار ذكي (Smart Queue Management System) متكامل للمحلات التجارية، العيادات، والمراكز الحكومية. يدعم النظام العمل بالوضع غير المتصل بالإنترنت (**Offline-First**)، والمزامنة اللحظية (**Real-time Synchronization**)، وتعدد اللغات الكامل (**Arabic, English, Turkish**)، مع تخصيص الهوية التجارية بالكامل واستدعاء العملاء صوتيًا وبصريًا.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/2b5ad0f1-89fc-44a4-9c40-210cb1cd418a
+## 🗺️ 1. نظرة عامة على بنية النظام (Architecture Overview)
 
-## Run Locally
+يعتمد التطبيق على بنية **Full-Stack (Vite + React + Express + Firebase/Firestore)**، حيث يتم تنظيم الكود باتباع أنماط التصميم المؤسساتية (Enterprise Patterns) لضمان الفصل التام للمسؤوليات (Separation of Concerns).
 
-**Prerequisites:**  Node.js
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Client / Browser UI                           │
+│  ┌──────────────────────┐   ┌────────────────────────────────────────┐  │
+│  │ Public Display Screen│   │  Customer Portal / Vendor Dashboard UI │  │
+│  └──────────┬───────────┘   └───────────────────┬────────────────────┘  │
+└─────────────┼───────────────────────────────────┼───────────────────────┘
+              │                                   │
+              ▼                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       Zustand State Store Layer                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │   Slices: Queue Sync, Subscription, Settings, Billing, Analytics  │  │
+│  └──────────────────────────────┬────────────────────────────────────┘  │
+└─────────────────────────────────┼───────────────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Repository Layer                              │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │   Abstracts Data Access & Coordinates Local Cache / Firestore API │  │
+│  └──────────────────────────────┬────────────────────────────────────┘  │
+└─────────────────────────────────┼───────────────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Backend / Express Service                        │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │   Vite SSR Middlewares, Observability, Speech Engines, Webhooks   │  │
+│  └──────────────────────────────┬────────────────────────────────────┘  │
+└─────────────────────────────────┼───────────────────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Database Service                              │
+│                          [ Firebase Firestore ]                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
+### المبادئ المعمارية الأساسية:
+1. **Repository Pattern**: لا يتم كتابة أي استدعاء مباشر لقاعدة البيانات Firestore داخل الكود البرمجي للمكونات (Components) أو المخازن (Stores). كل التفاعلات تتم عبر مستودعات (`src/repositories/*`) لتسهيل الاختبار والاختزال البرمجي والتبديل مستقبلاً.
+2. **Offline-First via Redux/Zustand Slices & Persistence**: يُبنى التطبيق ليعمل دون انقطاع حتى في حال انقطاع الشبكة. يتم الاحتفاظ بجميع العمليات المعلقة في ذاكرة التخزين المؤقت وحقنها عند عودة الاتصال بشكل تلقائي وسلس.
+3. **Decoupled Business Logic**: يتم إدارة منطق العمل بالكامل في شرائح (Slices) مفصولة ومجمعة في مخازن Zustand رئيسية، مما يبقي المكونات البصرية (Components) خفيفة ومسؤولة فقط عن العرض الرسومي والتفاعل مع المستخدم.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 📂 2. الهيكل التفصيلي للمجلدات (Folder Structure & File Roles)
+
+يحتوي المشروع على هيكلية متقدمة ومنظمة للغاية كالتالي:
+
+```bash
+/
+├── .env.example                  # نموذج لمتغيرات البيئة المطلوبة (المفاتيح والمنافذ)
+├── firebase-blueprint.json       # مخطط وهيكلية قاعدة البيانات المعتمدة لـ Firestore
+├── firestore.rules               # قواعد الأمان والحماية لقراءة وكتابة البيانات في Firestore
+├── server.ts                     # خادم Express الرئيسي (يتعامل مع الإنتاج، التطوير ومحاكاة الدفع عبر Stripe)
+├── vite.config.ts                # إعدادات أداة البناء Vite
+├── vitest.config.ts              # إعدادات إطار عمل الاختبارات Vitest
+├── src/                          # كود التطبيق المصدري الأساسي
+│   ├── main.tsx                  # نقطة الدخول البرمجية لواجهة العميل (React Entry Point)
+│   ├── index.css                 # التنسيقات الكلية باستخدام Tailwind CSS ومثبتات الخطوط والسمات
+│   ├── types.ts                  # تعريفات الأنواع البرمجية والواجهات المشتركة (Shared TypeScript Types)
+│   │
+│   ├── components/               # مكونات واجهة المستخدم الرسومية
+│   │   ├── AuthScreen.tsx        # شاشة تسجيل الدخول والتسجيل الخاص بأصحاب المحلات
+│   │   ├── CustomerPortal.tsx    # بوابة العميل الكبرى (سحب التذاكر، متابعة الانتظار، حجز المواعيد)
+│   │   ├── LandingPage.tsx       # الصفحة التعريفية العامة للتطبيق
+│   │   ├── LanguageSwitcher.tsx  # زر التبديل بين اللغات (العربية، الإنجليزية، التركية)
+│   │   ├── LimitAlertDialog.tsx  # نافذة التنبيه عند تجاوز حدود الباقة المجانية
+│   │   ├── PublicDisplay.tsx     # شاشة العرض العام الذكية لتلفاز صالة الانتظار (Lobby TV Screen)
+│   │   ├── ResilienceBoundary.tsx # جدار حماية لمنع انهيار التطبيق مع نظام تبليغ فوري للمطورين
+│   │   ├── StripeMockCheckout.tsx# واجهة محاكاة الدفع لباقات الاشتراك وعمليات الترقية
+│   │   ├── VendorDashboard.tsx   # لوحة تحكم التاجر/المحل لإدارة التذاكر، الموظفين، الخدمات والإعدادات
+│   │   │
+│   │   ├── customer/             # المكونات الفرعية التابعة لبوابة العميل
+│   │   │   ├── CustomerAlertModal.tsx      # نوافذ التنبيه عند وصول الدور
+│   │   │   ├── CustomerClosedScreen.tsx    # شاشة تظهر عند إغلاق المحل
+│   │   │   ├── CustomerHeader.tsx          # شريط الرأس الخاص بصفحة العميل
+│   │   │   ├── CustomerJoinForm.tsx        # نموذج انضمام العميل إلى طابور الانتظار
+│   │   │   ├── CustomerPausedScreen.tsx    # شاشة التوقف المؤقت لاستقبال عملاء جدد
+│   │   │   ├── CustomerPwaModal.tsx        # نافذة تثبيت التطبيق كـ Progressive Web App (PWA)
+│   │   │   ├── CustomerShareModal.tsx      # نافذة مشاركة رابط التذكرة ومسح الكود الرقْمي
+│   │   │   └── CustomerTicketBoard.tsx     # لوحة تذكرة العميل اللحظية لمتابعة الدور والوقت المتوقع
+│   │   │
+│   │   └── dashboard/            # المكونات الفرعية للوحة تحكم التاجر
+│   │       ├── BillingTab.tsx    # تبويب إدارة الباقات والاشتراكات والترقيات
+│   │       ├── DisplaysTab.tsx   # تبويب إدارة شاشات التلفاز المرتبطة (شاشات الانتظار)
+│   │       ├── QrTab.tsx         # تبويب مسح الكود ومشاركة روابط بوابة العميل
+│   │       ├── QueueTab.tsx      # تبويب لوحة المتابعة المباشرة للتذاكر (المناداة، الإلغاء، الخدمة، الحجوزات)
+│   │       ├── ReportsTab.tsx    # تبويب التقارير الإحصائية المتقدمة والرسوم البيانية (D3 / Recharts)
+│   │       ├── ServicesTab.tsx   # تبويب إدارة الخدمات المعروضة والمدد الزمنية والقدرة الاستيعابية
+│   │       └── ConfirmationModal.tsx # نافذة التأكيد للعمليات الحساسة (مثل حذف خدمة أو إلغاء تذكرة)
+│   │
+│   ├── controllers/              # عناصر معالجة الطلبات من الخادم (Express Controllers)
+│   │   ├── governanceController.ts   # إدارة المراقبة والحوكمة وتدقيق أفعال المستخدمين
+│   │   └── observabilityController.ts# توفير مؤشرات الأداء الحية للبيئة وسرعة المعالجة للتطبيقات
+│   │
+│   ├── docs/                     # كتيبات التشغيل الذاتي والبروتوكولات (Runbooks)
+│   │   └── runbooks.ts           # بروتوكول التشغيل التلقائي لاسترداد كوارث الخادم
+│   │
+│   ├── errors/                   # تصنيف وإدارة الاستثناءات والأخطاء المخصصة
+│   │
+│   ├── hooks/                    # خطافات React المخصصة لإدارة العمليات بشكل مستقل
+│   │   ├── useCustomerTicket.ts  # معالجة تفاصيل تذكرة العميل والاشتراك الحي بـ Firestore
+│   │   ├── useCustomerShop.ts    # جلب تفاصيل المحل والخدمات ومواعيد العمل لبوابة العميل
+│   │   ├── useDashboardTickets.ts# إدارة عمليات التذاكر لويندوز لوحة التحكم
+│   │   ├── useDashboardSettings.ts# خطاف التحكم في إعدادات لوحة التحكم وتوليد أكواد الـ QR وتحميلها
+│   │   └── useDashboardBilling.ts # إدارة الدفع والاشتراك الشهري والتحقق من الـ Webhook
+│   │
+│   ├── lib/                      # المجموعات البرمجية المساعدة والإعدادات العامة
+│   │   ├── firebase.ts           # تهيئة واتصال Firebase Client SDK وتفعيل المحاكيات والـ Analytics
+│   │   ├── DatabaseProvider.ts   # موفر إدارة قواعد البيانات الهجين (بين الـ Admin SDK والـ Client SDK)
+│   │   ├── i18n.ts               # محرك الترجمة متعدد اللغات الضخم (عربي، إنجليزي، تركي) مع إدارة الـ RTL والـ LTR
+│   │   ├── originUtils.ts        # استخلاص وتوحيد الروابط وعناوين النطاقات لحل مشاكل الـ Preview والـ iFrame
+│   │   ├── seed-db.ts            # سكريبت بذر قاعدة البيانات ببيانات واقعية للصالونات والعيادات والمراكز الحكومية
+│   │   └── serverLogger.ts       # نظام تسجيل الأحداث والـ Telemetry المهيأ للمراقبة الشاملة
+│   │
+│   ├── middlewares/              # برمجيات الخادم الوسيطة (Express Middlewares)
+│   │   ├── authMiddleware.ts     # التحقق من هويات المستخدمين وصلاحيات الـ Firebase ID Tokens
+│   │   ├── errorMiddleware.ts    # معالجة الأخطاء الشاملة وإرجاع ردود منظمة بصيغة JSON
+│   │   ├── observabilityMiddleware.ts # تسجيل أوقات معالجة الطلبات وبث الـ Metrics
+│   │   └── validationMiddleware.ts    # التحقق من صحة مدخلات الـ API باستخدام Zod Schemas
+│   │
+│   ├── repositories/             # مستودعات البيانات لإخفاء تعقيد الـ Firestore والـ SQL
+│   │   ├── shopRepository.ts     # عمليات جلب المحلات عبر الـ Slug والـ ID
+│   │   ├── queueRepository.ts    # معالجة إضافات التذاكر، عدادات الأرقام وسحب التذاكر عبر بوابة العميل
+│   │   ├── feedbackRepository.ts # تخزين ومراجعة تقييمات العملاء
+│   │   ├── notificationRepository.ts # بث التنبيهات وإرسال إشعارات الويب والـ Push Notifications
+│   │   ├── vendorShopRepository.ts    # تعديل إعدادات المحل وهويته البصرية وشعاره
+│   │   ├── vendorQueueRepository.ts   # تحريك طوابير الانتظار، استدعاء التذاكر، تعديل الحالات والعملاء
+│   │   ├── vendorServiceRepository.ts # إضافة، حذف وتعديل الخدمات وأوقات تقديمها
+│   │   ├── vendorDisplayRepository.ts # ربط، تنشيط وإرسال إشارة التحديث لشاشات صالات الانتظار
+│   │   └── vendorBillingRepository.ts # متابعة حالة الفواتير والاشتراكات الحالية والترقيات
+│   │
+│   ├── schemas/                  # قواعد التحقق الهيكلي من البيانات (Zod / API Schemas)
+│   │   └── apiSchemas.ts         # التحقق من المدخلات لطلبات الحوكمة والتقارير والفوترة
+│   │
+│   ├── services/                 # خدمات المنطق الخدمي والمراقبة
+│   │   ├── TelemetryService.ts   # معالجة مقاييس الأداء وإرسال التقارير التشغيلية
+│   │   ├── MonitoringService.ts  # مراقبة أداء الخادم وأخطاء الذاكرة بشكل مستمر
+│   │   ├── ShutdownManager.ts    # إدارة الإغلاق اللطيف للخادم عند استلام إشارات (SIGINT / SIGTERM)
+│   │   ├── FeatureFlagService.ts # ميزة إمكانية تفعيل/تعطيل ميزات النظام دون الحاجة لإعادة بناء الكود
+│   │   ├── ConfigValidator.ts    # مدقق التكوينات الأساسية للنظام قبل البدء للتأكد من سلامة البيئة
+│   │   ├── vendorAudioService.ts # تشغيل التأثيرات الصوتية عند استدعاء التذاكر
+│   │   ├── vendorSpeechService.ts# تقنية تحويل النصوص إلى كلام (Text-to-Speech) للمناداة التلقائية بالأرقام والأسماء
+│   │   ├── vendorNotificationService.ts # معالجة تفعيل وإرسال التنبيهات الفورية للمتصفح والأجهزة
+│   │   └── vendorStorageService.ts      # إدارة التخزين المؤقت وحفظ الملفات
+│   │
+│   └── store/                    # إدارة حالات Zustand والتزامن اللحظي
+│       ├── authStore.ts          # حالة المستخدم المسجل، الصلاحيات، والجلسة المفتوحة
+│       ├── notificationStore.ts  # التنبيهات، رموز FCM (Firebase Cloud Messaging) وحالة أذونات الإشعارات
+│       ├── shopStore.ts          # معالجة وتحميل بيانات المحل النشط والخدمات المتاحة لبوابة العميل
+│       ├── uiStore.ts            # إدارة حالة السمة (ليلي / نهاري)، واللغات، والـ Modals المشتركة
+│       ├── queueStore.ts         # المنسق العام لحالات طابور العميل اللحظية
+│       │
+│       ├── queue/                # تفاصيل وإدارة شريحة طوابير العميل
+│       │   ├── types.ts          # أنواع البيانات الخاصة بـ Queue Store
+│       │   ├── slices/           # شرائح تقسيم منطق العمل
+│       │   │   ├── queueDataSlice.ts         # تخزين بيانات التذكرة الحالية والعملاء المنتظرين
+│       │   │   ├── queueSubscriptionSlice.ts # الاشتراك الحي بـ Firestore لجلب التحديثات في الوقت الفعلي
+│       │   │   ├── queueActionsSlice.ts      # العمليات الأساسية (طلب تذكرة جديدة، إلغاء، تقييم)
+│       │   │   ├── queueSyncSlice.ts         # شريحة مزامنة العمليات غير المتصلة بالشبكة (Offline Sync Engine)
+│       │   │   └── queueUiSlice.ts           # حالة واجهة المستخدم الخاصة بالعميل (النوافذ المنبثقة، حالات التحميل)
+│       │   └── utils/
+│       │
+│       └── vendor/               # تفاصيل مخزن بيانات البائع/صاحب المحل
+│           ├── vendorStore.ts    # المنسق العام لإدارة لوحة تحكم التاجر النشط
+│           ├── types.ts          # أنواع البيانات الخاصة بـ Vendor Store
+│           ├── slices/           # شرائح تقسيم منطق العمل للبائع
+│           │   ├── vendorShopSlice.ts        # تحديث شعار المحل، هويته البصرية، ألوانه، وأوقات العمل
+│           │   ├── vendorServiceSlice.ts     # إدارة الخدمات المقدمة ومواصفاتها
+│           │   ├── vendorQueueSlice.ts       # تحريك التذاكر (التالي، استدعاء، نقل العداد، إعادة النداء، الإنهاء)
+│           │   ├── vendorDisplaySlice.ts     # مراقبة وإدارة الشاشات وآخر ظهور نبضي لها
+│           │   ├── vendorBillingSlice.ts     # التحقق من الاشتراكات وترقية الباقة بحدودها الآمنة
+│           │   ├── vendorAnalyticsSlice.ts   # معالجة التقارير والتحليلات ورسوم البياني والمدد المتوقعة
+│           │   └── vendorSettingsSlice.ts    # الإعدادات العامة للوحة التحكم ومستودعات التخزين المؤقت
+│           └── utils/
+```
+
+---
+
+## ⚡ 3. إدارة الحالات وهيكلية Zustand Stores
+
+التطبيق يستعمل مكتبة **Zustand** لإدارة الحالات بشكل مرن وسريع للغاية. لمنع تضخم الكود ومشاكل الذاكرة والتداخل، يتم تقسيم المخازن المعقدة إلى **Slices** (شرائح) يتم تجميعها معًا باستخدام نمط الـ Spread المساعد في Zustand.
+
+### 📊 مخزن العميل الرئيسي (`src/store/queueStore.ts`):
+يجمع بين الشرائح الفرعية التالية لتوفير واجهة تفاعل ممتازة للعملاء:
+1. **`queueDataSlice`**: يحتوي على بيانات تذكرة العميل الحالية (`activeTicket`) بالإضافة إلى قائمة الـ `todayTickets` لتتبع حركة طوابير الانتظار الكلية.
+2. **`queueSubscriptionSlice`**: يقوم بفتح اتصالات حية مستمرة بـ Firestore باستخدام `onSnapshot` للاستماع لأي تغيير في التذكرة الخاصة بالعميل. إذا تم استدعاء التذكرة أو تغيير حالتها من قبل التاجر، يتم تحديث الشاشة على الفور وتنبيه العميل بالصوت والصورة والاهتزاز.
+3. **`queueActionsSlice`**: يحتوي على الإجراءات التي يقوم بها العميل مثل:
+   - `joinQueue(customerName, serviceId)`: الانضمام الفوري للطابور.
+   - `cancelTicket(ticketId)`: إلغاء التذكرة الحالية والانسحاب من الطابور.
+   - `submitFeedback(rating, comment)`: تقديم مراجعة فورية بعد تقديم الخدمة.
+4. **`queueSyncSlice`**: **محرك عدم الاتصال (Offline Sync Engine)**.
+
+---
+
+## 🔌 4. الاتصال بقاعدة البيانات ومنطق عدم الاتصال (Offline-First Logic)
+
+يتميز النظام بقدرته الفائقة على الحفاظ على استمرارية العمل حتى في ظل انقطاع كامل للإنترنت.
+
+### 🛡️ محرك المزامنة التلقائية لعدم الاتصال (`queueSyncSlice.ts`):
+عندما يقوم المستخدم أو العميل بأي عملية (مثل سحب تذكرة، مناداة عميل، إلغاء تذكرة) وكانت الشبكة غير متوفرة:
+1. يتم فحص حالة الاتصال عبر مصفوفة حية داخل المخزن.
+2. يتم توجيه العملية فورًا وكتابتها في قاعدة بيانات التخزين المؤقت المحلي (`localStorage` / مصفوفة العمليات المعلقة `pendingOperations`).
+3. يتم إرجاع نجاح وهمي وسلس للعميل (Optimistic UI Update) بحيث يرى التذكرة قد أُنشئت بالفعل أو تم تغيير الحالة على شاشته لمنع شعوره بالتعليق أو الفشل.
+4. يقوم النظام بالاستماع التلقائي لحالة الشبكة عبر الحدث `window.addEventListener('online', ...)`.
+5. فور عودة الاتصال بالإنترنت، تقوم شريحة المزامنة `queueSyncSlice` بالخطوات التالية:
+   - سحب العمليات المعلقة بالترتيب الدقيق لإنشائها (FIFO - First In First Out) للحفاظ على الترتيب العادل للطوابير.
+   - إرسال العمليات في طلبات مجمعة (Batch Operations) إلى Firestore عبر الـ `Repository Layer`.
+   - بمجرد نجاح الإرسال، يتم حذف العمليات من الطابور المعلق وتحديث الواجهة بالبيانات الحقيقية المرجعة من السيرفر.
+
+```typescript
+// مقتطف توضيحي لمنطق المزامنة التلقائية (من queueSyncSlice)
+export const createQueueSyncSlice = (set, get) => ({
+  pendingOperations: JSON.parse(localStorage.getItem("pending_ops") || "[]"),
+  isOnline: navigator.onLine,
+  
+  setOnlineStatus: (status) => {
+    set({ isOnline: status });
+    if (status) {
+      get().triggerOfflineSync();
+    }
+  },
+  
+  queuePendingOperation: (op) => {
+    const updated = [...get().pendingOperations, op];
+    set({ pendingOperations: updated });
+    localStorage.setItem("pending_ops", JSON.stringify(updated));
+  },
+  
+  triggerOfflineSync: async () => {
+    const ops = get().pendingOperations;
+    if (ops.length === 0) return;
+    
+    console.log(`[Offline Sync] Found ${ops.length} pending ticket(s) to synchronize.`);
+    // تنفيذ العمليات تلو الأخرى لتجنب تعارض الـ Counters
+    for (const op of ops) {
+      try {
+        await executeOperationOnFirestore(op);
+      } catch (err) {
+        console.error("Failed to sync operation:", err);
+      }
+    }
+    set({ pendingOperations: [] });
+    localStorage.removeItem("pending_ops");
+  }
+});
+```
+
+---
+
+## 🔗 5. توجيه الروابط الذكي وحل مشكلات الترميز (Routing & QR Engine)
+
+أحد أهم الأجزاء التي تم إصلاحها وتطويرها بدقة متناهية هو نظام التوجيه والتحكم بالـ Slugs الخاصة بالمحلات، لاسيما عند استخدام **لغات مثل العربية والتركية** التي تحتوي على محارف خاصة (Special / Encoded Characters) مثل: `حلاق-المستقبل`, `şifa-kliniği` وغيرها.
+
+### 🛡️ التمكين التام للحروف العربية والتركية في العناوين:
+لحل مشكلة تعرض الروابط للتخريب أو الفشل عند مسح كود الـ QR مسبقًا:
+1. يتم تمرير الـ Slug عبر الدوال القياسية `encodeURIComponent` عند توليد أكواد الـ QR أو نسخ روابط بوابات العملاء وشاشات العرض.
+2. عند استقبال الرابط في المتصفح، يتم قراءة مسار العنوان من خلال معالجة متقدمة لـ `window.location.pathname` واستخلاص الـ Slug ثم فك تشفيره بشكل فوري وتلقائي باستخدام `decodeURIComponent` لمنع حدوث أي تعارض مع قاعدة البيانات.
+
+```typescript
+// معالجة توجيه الروابط المتقدمة داخل App.tsx
+const parseUrl = () => {
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+
+  let slug = params.get("shop");
+  let page = params.get("page");
+
+  // دالة فك تشفير آمنة تمنع انهيار النظام عند وجود محارف خاصة
+  const getDecodedPart = (part: string | undefined): string | null => {
+    if (!part) return null;
+    try {
+      return decodeURIComponent(part);
+    } catch (e) {
+      console.warn("Failed to decode URL segment:", part, e);
+      return part;
+    }
+  };
+
+  if (pathname.startsWith("/portal/")) {
+    const parts = pathname.split("/");
+    if (parts[2]) {
+      slug = getDecodedPart(parts[2]);
+      page = null;
+    }
+  } else if (pathname.startsWith("/display/")) {
+    const parts = pathname.split("/");
+    if (parts[2]) {
+      slug = getDecodedPart(parts[2]);
+      page = "display";
+    }
+  } else if (pathname.startsWith("/display-setup/")) {
+    const parts = pathname.split("/");
+    if (parts[2]) {
+      slug = getDecodedPart(parts[2]);
+      page = "display";
+    }
+  }
+
+  setCurrentSlug(slug);
+  setCurrentPage(page);
+};
+```
+
+### 🔁 المزامنة والتوجيه الاحتياطي لشاشات التلفزيون (Fallback Routing):
+في حال تم الوصول إلى رابط شاشة التلفاز التفاعلية بـ ID الشاشة أو الـ Slug الخاص بها بدلاً من رابط المحل الكامل:
+يتحقق التطبيق فوريًا عبر `PublicDisplay.tsx` في حال لم يعثر على محل مطابق للـ Slug في مجموعة `shops`. يقوم النظام بالبحث التلقائي في مستند الـ `displays` لمعرفة ما إذا كان الـ Slug الممرر يمثل مُعرّف شاشة مسجلة، وفور العثور عليها يستخرج الـ `shopId` المرتبط بها ويقوم بتحميل بيانات المحل المقابلة فورًا دون إظهار شاشة خطأ للمستخدم.
+
+---
+
+## 🎨 6. ميزات مخصصة والتكامل مع الخدمات الخارجية
+
+### 🎙️ استدعاء صوتي تلقائي (Text-To-Speech - TTS):
+عندما يقوم التاجر بالضغط على زر "مناداة العميل التالي" في لوحة التحكم، يتم بث إشارة حية تستقبلها شاشة التلفاز العمومية (`PublicDisplay.tsx`). يتم توليد نص نداء صوتي تلقائي وبثه باستخدام محرك الكلام المدمج في المتصفح (`window.speechSynthesis`) بناءً على لغة النظام المعتمدة:
+- **العربية**: "تذكرة رقم مئة واثنين، يرجى التوجه إلى كاونتر رقم ثلاثة."
+- **الإنجليزية**: "Ticket number 102, please proceed to Counter number 3."
+- **التركية**: "Bilet numarası 102, lütfen 3 numaralı gişeye geçiniz."
+
+### 💳 بوابة الدفع والتحقق من الاشتراكات (Billing & Stripe Integration):
+يحتوي النظام على بوابة دفع مدمجة ومحاكاة كاملة لـ Stripe Checkout وآليات التحقق والحدود:
+- يمنع النظام المستخدمين في الباقة المجانية من تجاوز الحدود المتاحة (عدد الخدمات المحدود، عدد شاشات العرض المتصلة، إلخ).
+- يوفر خادم Express مسارات متخصصة للتحقق من الفواتير والاشتراكات وبث إشارات الدفع الناجحة أو الملغاة مع معالجة الـ Webhooks لتحديث حالة اشتراك التاجر فورًا في Firestore.
+
+---
+
+## 🛡️ 7. الحماية، التشغيل التلقائي والمرونة (Resilience & Disaster Recovery)
+
+النظام مهيأ بأعلى معايير الاستقرار والتحمل لمواجهة الأخطاء التشغيلية:
+
+1. **Resilience Boundary Component**: جدار حماية ذكي يلتف حول كامل التطبيق لمنع ظهور "الشاشة البيضاء الميتة" في حال حدوث خطأ غير متوقع. يوفر جدار الحماية خيار إعادة التشغيل الذكي، مع تدوين وتخزين سجل الأخطاء والـ Stack Trace.
+2. **Support System Integration**: في حال تعثر التطبيق، يتم إتاحة خيار فوري للعميل أو التاجر لكتابة تذكرة دعم فني يتم التقاطها وتخزينها كـ Incident Report تلقائيًا للمطورين لتشخيص الخلل وحله في ثوانٍ.
+3. **Graceful Shutdown Sequence**: خادم Express مجهز بـ `ShutdownManager` يلتقط إشارات التوقف لتصفية العمليات وحفظ الجلسات قبل الإغلاق لمنع فقدان أي بيانات أثناء عمليات التحديث الساخنة (Hot Deployments).
+
+---
+
+## 🛠️ 8. تشغيل واختبار المشروع (Commands & Commands Reference)
+
+لتشغيل المشروع وتطويره بشكل سليم، استخدم الأوامر التالية:
+
+### ⚙️ تشغيل بيئة التطوير المحلية (Local Development):
+```bash
+npm run dev
+```
+يقوم هذا الأمر بتشغيل خادم Express الذي يقوم بدوره بتمرير ومعالجة الواجهات الرسومية لـ React عبر Vite Middleware على المنفذ المعتمد `3000`.
+
+### 🧪 تشغيل الاختبارات الشاملة (Testing):
+النظام مغطى بالكامل باختبارات وحدة واختبارات تكاملية متطورة باستخدام Vitest:
+```bash
+npm run test
+```
+يقوم هذا الأمر بفحص جميع الـ Repositories ومخازن Zustand للتأكد من سلامة منطق العمليات.
+
+### 📦 بناء النظام للإنتاج (Production Build):
+```bash
+npm run build
+```
+يقوم بعمل بناء محسن لكود واجهة المستخدم ووضعه في مجلد `dist/` مع تجميع خادم الـ Express عبر `esbuild` ليكون جاهزًا للتشغيل والإنتاج الفوري.
+
+---
+> **إلى الذكاء الاصطناعي التابع لـ Kimi أو أي مطور تالٍ**: 
+> عند إضافة ميزات جديدة، يرجى الالتزام التام بالهيكل المقسم للـ **Slices** والـ **Repositories**، والحرص الكامل على بقاء العمليات خاضعة لمنطق عدم الاتصال **Offline-First**، وتأكيد حماية وفك ترميز الـ Slugs لضمان عدم توقف الخدمة عن المحلات التي تملك أسماء عربية أو تركية معقدة. بالتوفيق في رحلة التطوير! 🚀

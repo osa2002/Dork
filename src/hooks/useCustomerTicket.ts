@@ -15,6 +15,7 @@ import { Ticket, Shop, Service } from "../types";
 import { playChime } from "../lib/audio";
 import { cacheData, getCachedData, getPendingTickets, deletePendingTicket } from "../lib/offlineDb";
 import { getClientStartOfTodayInTimezone } from "../lib/shopUtils";
+import { getAppOrigin } from "../lib/originUtils";
 import { useShallow } from "zustand/react/shallow";
 import { useQueueStore } from "../store";
 
@@ -439,7 +440,7 @@ export function useCustomerTicket({
 
   const sendApproachingSmsWhatsappNotification = async (ticket: Ticket, shopName: string, channel: "sms" | "whatsapp", isRtl: boolean) => {
     try {
-      const trackingUrl = `${window.location.origin}/?shop=${shop?.slug}&ticketId=${ticket.id}`;
+      const trackingUrl = `${getAppOrigin()}/?shop=${shop?.slug}&ticketId=${ticket.id}`;
       const response = await fetch("/api/send-sms-whatsapp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
