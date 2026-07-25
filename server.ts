@@ -12,6 +12,9 @@ import rateLimit from "express-rate-limit";
 import observabilityRouter from "./src/routes/observabilityRoutes";
 import governanceRouter from "./src/routes/governanceRoutes";
 import messagingRouter from "./src/routes/messagingRoutes";
+import financeRouter from "./src/financial/api/financeRoutes";
+import iamRouter from "./src/iam/api/iamRoutes";
+import workflowRouter from "./src/workflow/api/workflowRoutes";
 import { adminRouter } from "./server/admin/routes/adminRoutes";
 import { sendWelcomeNotificationsOnServer } from "./src/services/serverNotificationService";
 import { AuditLogService } from "./src/services/AuditLogService";
@@ -199,6 +202,15 @@ async function startServer() {
 
   // Enterprise Governance, Audit Logging & Disaster Recovery Backend Endpoints (Phase 6.1)
   app.use(governanceRouter);
+
+  // Enterprise Financial Operations Platform Endpoints (Phase 006)
+  app.use("/api/v1/finance", financeRouter);
+
+  // Enterprise Identity & Access Management Endpoints (Phase 007)
+  app.use("/api/v1/iam", iamRouter);
+
+  // Enterprise Workflow & Automation Platform Endpoints (Phase 008)
+  app.use("/api/v1/workflows", workflowRouter);
 
   // Enterprise Platform Administration Module (Isolated Architecture)
   app.use("/api/v1/admin", adminRouter);
