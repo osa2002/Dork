@@ -9,6 +9,7 @@ import { AdminLayout } from "../layouts/AdminLayout";
 import { AdminAuthPage } from "../pages/AdminAuthPage";
 import { RBACGuard } from "../components/RBACGuard";
 import { FeatureFlagGuard } from "../components/FeatureFlagGuard";
+import { AdminErrorBoundary } from "../components/AdminErrorBoundary";
 
 const AdminDashboardPage = lazy(() =>
   import("../pages/AdminDashboardPage").then((m) => ({ default: m.AdminDashboardPage }))
@@ -29,7 +30,11 @@ const AdminAuditLogsPage = lazy(() =>
   import("../pages/AdminAuditLogsPage").then((m) => ({ default: m.AdminAuditLogsPage }))
 );
 
-export const AdminRouter: React.FC = () => {
+interface IAdminRouterProps {
+  onBackToHome?: () => void;
+}
+
+export const AdminRouter: React.FC<IAdminRouterProps> = ({ onBackToHome }) => {
   const user = useAdminStore((state) => state.user);
   const isAuthenticated = useAdminStore((state) => state.isAuthenticated);
   const activePath = useAdminStore((state) => state.activePath);
@@ -37,7 +42,11 @@ export const AdminRouter: React.FC = () => {
   const logout = useAdminStore((state) => state.logout);
 
   if (!isAuthenticated || !user) {
-    return <AdminAuthPage onSuccess={() => setActivePath("/admin")} />;
+    return (
+      <AdminErrorBoundary>
+        <AdminAuthPage onSuccess={() => setActivePath("/admin")} onBackToHome={onBackToHome} />
+      </AdminErrorBoundary>
+    );
   }
 
   const renderActivePage = () => {
@@ -95,17 +104,19 @@ export const AdminRouter: React.FC = () => {
   };
 
   return (
-    <AdminLayout onNavigate={setActivePath} onLogout={logout}>
-      <Suspense
-        fallback={
-          <div className="flex flex-col items-center justify-center p-12 text-slate-400 space-y-3">
-            <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
-            <p className="text-xs font-mono">Loading Admin Module Chunk...</p>
-          </div>
-        }
-      >
-        {renderActivePage()}
-      </Suspense>
-    </AdminLayout>
+    <AdminErrorBoundary>
+      <AdminLayout onNavigate={setActivePath} onLogout={logout}>
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400 space-y-3">
+              <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
+              <p className="text-xs font-mono">Loading Admin Module Chunk...</p>
+            </div>
+          }
+        >
+          {renderActivePage()}
+        </Suspense>
+      </AdminLayout>
+    </AdminErrorBoundary>
   );
 };

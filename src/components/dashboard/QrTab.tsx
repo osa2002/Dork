@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   QrCode, Copy, Check, Download, Info, Clock, Save, 
   Upload, Scissors, Stethoscope, Landmark, PhoneCall, UtensilsCrossed, HelpCircle,
-  Printer, Palette, Sparkles, Image as ImageIcon, X, ExternalLink, Smartphone, CheckCircle2
+  Printer, Palette, Sparkles, Image as ImageIcon, X, ExternalLink, Smartphone, CheckCircle2,
+  Wand2, Loader2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Shop, WorkingHoursDay } from "../../types";
 import { getAppOrigin } from "../../lib/originUtils";
+import { useVendorStore } from "../../store/vendor/vendorStore";
 import QRCode from "qrcode";
+import { ShopBrandingTool } from "./ShopBrandingTool";
 
 interface QrTabProps {
   shop: Shop | null;
@@ -24,6 +27,10 @@ interface QrTabProps {
   setEditShopLogoUrl: (val: string) => void;
   editShopTicketColor: string;
   setEditShopTicketColor: (val: string) => void;
+  editDisplayBgTheme: string;
+  setEditDisplayBgTheme: (val: string) => void;
+  editDisplayAnimatedBg: boolean;
+  setEditDisplayAnimatedBg: (val: boolean) => void;
   settingsSaving: boolean;
   dragActive: boolean;
   workingHoursEnabled: boolean;
@@ -65,6 +72,10 @@ export function QrTab({
   setEditShopLogoUrl,
   editShopTicketColor,
   setEditShopTicketColor,
+  editDisplayBgTheme,
+  setEditDisplayBgTheme,
+  editDisplayAnimatedBg,
+  setEditDisplayAnimatedBg,
   settingsSaving,
   dragActive,
   workingHoursEnabled,
@@ -97,6 +108,53 @@ export function QrTab({
   const [showLogoOverlay, setShowLogoOverlay] = useState<boolean>(true);
   const [showPosterModal, setShowPosterModal] = useState<boolean>(false);
   const [isExportingPoster, setIsExportingPoster] = useState<boolean>(false);
+
+  // Imagen AI Logo Generation state
+  const [imagenPromptHint, setImagenPromptHint] = useState<string>("");
+  const [isGeneratingLogo, setIsGeneratingLogo] = useState<boolean>(false);
+  const [imagenSuccessMsg, setImagenSuccessMsg] = useState<string | null>(null);
+  const [imagenErrorMsg, setImagenErrorMsg] = useState<string | null>(null);
+
+  const handleGenerateImagenLogo = async () => {
+    if (isGeneratingLogo) return;
+    setIsGeneratingLogo(true);
+    setImagenSuccessMsg(null);
+    setImagenErrorMsg(null);
+
+    try {
+      const res = await fetch("/api/generate-shop-logo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopName: editShopName || shop?.name || "",
+          category: editShopCategory || shop?.category || "other",
+          promptHint: imagenPromptHint,
+          lang: isRtl ? "ar" : "en",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.logoUrl) {
+        setEditShopLogoUrl(data.logoUrl);
+        setImagenSuccessMsg(
+          data.message || (isRtl ? "تم توليد الشعار بنجاح وحفظه للمتجر!" : "Shop logo generated and saved successfully!")
+        );
+        if (shop?.id) {
+          try {
+            await useVendorStore.getState().updateShopSettings(shop.id, { logoUrl: data.logoUrl });
+          } catch (e) {
+            console.warn("Auto-saving logo to Firestore fallback:", e);
+          }
+        }
+      } else {
+        setImagenErrorMsg(data.error || (isRtl ? "فشل توليد الشعار، يرجى إعادة المحاولة." : "Failed to generate logo. Please try again."));
+      }
+    } catch (err: any) {
+      setImagenErrorMsg(err.message || (isRtl ? "حدث خطأ أثناء الاتصال بخدمة Imagen." : "Connection error to Imagen service."));
+    } finally {
+      setIsGeneratingLogo(false);
+    }
+  };
 
   const posterRef = useRef<HTMLDivElement>(null);
 
@@ -687,66 +745,197 @@ export function QrTab({
               </div>
             </div>
 
-            {/* Logo Uploading File drag-drop area */}
-            <div className="space-y-2">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                {t("vend_field_logo_url_label", "Shop Logo Image")}
-              </label>
-              
-              <div 
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-3xl p-6 text-center cursor-pointer transition-all relative overflow-hidden ${
-                  dragActive 
-                    ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20" 
-                    : "border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700"
-                }`}
-              >
-                <input 
-                  type="file"
-                  id="logo-file-input"
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-
-                {editShopLogoUrl ? (
-                  <div className="flex items-center justify-center gap-4">
-                    <img 
-                      src={editShopLogoUrl}
-                      alt="Brand Logo Preview"
-                      className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shadow-sm"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="text-left space-y-1">
-                      <p className="text-xs font-black text-slate-800 dark:text-white">
-                        {t("vend_logo_preview_title", "Logo uploaded successfully!")}
-                      </p>
-                      <button 
-                        type="button"
-                        onClick={() => setEditShopLogoUrl("")}
-                        className="text-[10px] text-rose-500 hover:text-rose-600 font-extrabold underline cursor-pointer"
-                      >
-                        {t("vend_btn_remove_logo", "Remove & Reset")}
-                      </button>
-                    </div>
+            {/* Public Display Animated Background Configuration Section */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 text-start shadow-md text-white">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 animate-pulse text-indigo-400" />
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center mx-auto">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-black text-indigo-600 dark:text-indigo-400">
-                        {t("vend_logo_upload_prompt", "Click to upload image")}
-                      </span>{" "}
-                      {t("vend_logo_upload_drag", "or drag & drop here")}
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {t("vend_logo_size_limit", "PNG, JPG up to 1MB")}
+                  <div>
+                    <h4 className="text-xs font-black text-white flex items-center gap-2">
+                      <span>{t("vend_display_bg_title", "خلفية شاشة عرض الجمهور المتحركة (Animated Display Background)")}</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                      {t("vend_display_bg_desc", "إعطاء شاشة TV ومونيتور العرض في المحل مظهراً حيوياً وعصرياً من خلال التأثيرات والرسوم المتحركة الانسيابية.")}
                     </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setEditDisplayAnimatedBg(!editDisplayAnimatedBg)}
+                  className={`w-12 h-6 rounded-full transition-colors relative focus:outline-none shrink-0 ${
+                    editDisplayAnimatedBg ? "bg-indigo-600" : "bg-slate-700"
+                  }`}
+                  id="toggle-animated-bg"
+                >
+                  <span className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all shadow-sm ${
+                    editDisplayAnimatedBg ? "start-7" : "start-1"
+                  }`} />
+                </button>
+              </div>
+
+              {editDisplayAnimatedBg && (
+                <div className="space-y-3 pt-2">
+                  <label className="block text-[10px] font-extrabold text-slate-300 uppercase tracking-wider">
+                    {t("vend_display_theme_select", "اختر نمط الخلفية المتحركة (Animation Theme)")}
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {[
+                      {
+                        id: "aurora",
+                        name: isRtl ? "شفق قطبي ساطع" : "Aurora Dynamics",
+                        desc: isRtl ? "أضواء شفق متوهجة متدفقة" : "Luminous floating gradient blobs",
+                        previewCss: "from-indigo-900 via-purple-900 to-slate-950",
+                        accentColor: "indigo"
+                      },
+                      {
+                        id: "cyber",
+                        name: isRtl ? "شبكة سيبرانية" : "Cyber Grid Pulse",
+                        desc: isRtl ? "نبضات هندسية رقمية" : "Neon grid lines with light beams",
+                        previewCss: "from-cyan-950 via-slate-950 to-indigo-950",
+                        accentColor: "cyan"
+                      },
+                      {
+                        id: "waves",
+                        name: isRtl ? "أمواج نيون" : "Laser Fluid Waves",
+                        desc: isRtl ? "أمواج تدرج متدفقة هادئة" : "Smooth sweeping liquid color waves",
+                        previewCss: "from-emerald-950 via-teal-950 to-slate-950",
+                        accentColor: "emerald"
+                      },
+                      {
+                        id: "mesh",
+                        name: isRtl ? "كرات عائمة" : "Glowing Mesh Orbs",
+                        desc: isRtl ? "كرات مشعة تسبح في الخلفية" : "Floating radiant blurred spheres",
+                        previewCss: "from-purple-950 via-rose-950 to-slate-950",
+                        accentColor: "purple"
+                      },
+                      {
+                        id: "slate",
+                        name: isRtl ? "داكن هادئ" : "Minimal Dark",
+                        desc: isRtl ? "خلفية داكنة ثابتة موفرة للطاقة" : "Clean dark static canvas",
+                        previewCss: "from-slate-900 to-slate-950",
+                        accentColor: "slate"
+                      }
+                    ].map((themeItem) => {
+                      const isSelected = editDisplayBgTheme === themeItem.id;
+                      return (
+                        <button
+                          key={themeItem.id}
+                          type="button"
+                          onClick={() => setEditDisplayBgTheme(themeItem.id)}
+                          className={`p-3.5 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between gap-3 relative overflow-hidden ${
+                            isSelected
+                              ? "bg-slate-800/90 border-indigo-500 ring-2 ring-indigo-500/50 shadow-lg"
+                              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-850"
+                          }`}
+                        >
+                          <div className={`w-full h-10 rounded-xl bg-gradient-to-r ${themeItem.previewCss} border border-white/10 relative overflow-hidden flex items-center justify-end px-3`}>
+                            {isSelected && (
+                              <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-black shadow-md">
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-white block">
+                              {themeItem.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
+                              {themeItem.desc}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Advanced Shop Branding & Digital Queue Customizer Tool */}
+            <ShopBrandingTool
+              editShopName={editShopName}
+              editShopLogoText={editShopLogoText}
+              editShopCategory={editShopCategory}
+              editShopLogoUrl={editShopLogoUrl}
+              setEditShopLogoUrl={setEditShopLogoUrl}
+              editShopTicketColor={editShopTicketColor}
+              setEditShopTicketColor={setEditShopTicketColor}
+              dragActive={dragActive}
+              handleDrag={handleDrag}
+              handleDrop={handleDrop}
+              handleFileChange={handleFileChange}
+              isRtl={isRtl}
+            />
+
+            {/* AI Imagen Custom Logo Generator Section */}
+            <div className="bg-gradient-to-br from-indigo-50/80 via-purple-50/50 to-slate-50 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 p-5 rounded-3xl space-y-4 text-start shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>{t("vend_imagen_logo_title", "توليد شعار مخصص بالذكاء الاصطناعي (Imagen AI)")}</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                      {t("vend_imagen_logo_desc", "توليد شعار احترافي لمتجرك تلقائياً باستخدام نموذج Imagen بناءً على اسمه ونشاطه وحفظه في Firestore لعرضه على صفحة التذاكر الرقمية.")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-600 dark:text-slate-300 mb-1">
+                    {t("vend_imagen_prompt_hint_label", "ملاحظات إضافية للتصميم (اختياري)")}
+                  </label>
+                  <input
+                    type="text"
+                    value={imagenPromptHint}
+                    onChange={(e) => setImagenPromptHint(e.target.value)}
+                    placeholder={t("vend_imagen_prompt_placeholder", "مثال: ألوان ذهبية وفخمة، رمز شفرة حلاقة...")}
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleGenerateImagenLogo}
+                    disabled={isGeneratingLogo || !editShopName.trim()}
+                    className="flex-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-xs py-3.5 px-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                    id="btn-generate-imagen-logo"
+                  >
+                    {isGeneratingLogo ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>{t("vend_imagen_generating", "جاري تصميم الشعار بواسطة Imagen AI...")}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-4 h-4" />
+                        <span>{t("vend_imagen_btn_generate", "توليد الشعار وحفظه في Firestore")}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {imagenSuccessMsg && (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 p-3 rounded-2xl flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-extrabold animate-fadeIn">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>{imagenSuccessMsg}</span>
+                  </div>
+                )}
+
+                {imagenErrorMsg && (
+                  <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 p-3 rounded-2xl flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-extrabold">
+                    <X className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{imagenErrorMsg}</span>
                   </div>
                 )}
               </div>

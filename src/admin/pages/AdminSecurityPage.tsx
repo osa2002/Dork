@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ShieldCheck,
   Lock,
@@ -23,6 +24,7 @@ import {
 import { useAdminStore } from "../store/adminStore";
 
 export const AdminSecurityPage: React.FC = () => {
+  const { t } = useTranslation();
   const fetchSecurityOverview = useAdminStore((state) => state.fetchSecurityOverview);
   const activeSessions = useAdminStore((state) => state.activeSessions);
   const revokeSession = useAdminStore((state) => state.revokeSession);
@@ -65,11 +67,11 @@ export const AdminSecurityPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Identity, RBAC & Threat Protection Engine</span>
+            <span>{t("admin_nav_security", "Enterprise Security Center")}</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-100">Enterprise Security Center</h1>
+          <h1 className="text-2xl font-black text-slate-100">{t("admin_nav_security", "Enterprise Security Center")}</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Manage user sessions, threat detection, device governance, RBAC role matrices, API key lifecycle, and KMS secret rotations.
+            {t("admin_security_desc", "Manage user sessions, threat detection, device governance, RBAC role matrices, API key lifecycle, and KMS secret rotations.")}
           </p>
         </div>
 
@@ -77,8 +79,8 @@ export const AdminSecurityPage: React.FC = () => {
           onClick={() => fetchSecurityOverview()}
           className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-2 border border-slate-700 cursor-pointer shrink-0"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Sync Security State</span>
+          <RefreshCw className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          <span>{t("admin_sync_state", "Sync Security State")}</span>
         </button>
       </div>
 

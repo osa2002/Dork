@@ -85,6 +85,7 @@ export interface VendorQueueActions {
     announceCallingTicket: (ticketNumber: string, counterNumber: string, serviceName: string) => void
   ) => Promise<void>;
   updateTicketPriority: (ticketId: string, currentPriority: boolean) => Promise<void>;
+  clearWaitingTickets: (shopId: string, serviceId?: string) => Promise<void>;
   refreshQueue: () => void;
 }
 
@@ -208,6 +209,8 @@ export interface VendorSettingsState {
   editShopCategory: string;
   editShopLogoUrl: string;
   editShopTicketColor: string;
+  editDisplayBgTheme: string;
+  editDisplayAnimatedBg: boolean;
   workingHoursEnabled: boolean;
   workingHoursDays: { [key: string]: WorkingHoursDay };
   settingsSaving: boolean;
@@ -228,6 +231,8 @@ export interface VendorSettingsActions {
   setEditShopCategory: (category: string) => void;
   setEditShopLogoUrl: (url: string) => void;
   setEditShopTicketColor: (color: string) => void;
+  setEditDisplayBgTheme: (theme: string) => void;
+  setEditDisplayAnimatedBg: (enabled: boolean) => void;
   setWorkingHoursEnabled: (enabled: boolean) => void;
   setWorkingHoursDays: (days: { [key: string]: WorkingHoursDay }) => void;
   setSettingsSaving: (saving: boolean) => void;

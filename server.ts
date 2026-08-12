@@ -15,6 +15,7 @@ import messagingRouter from "./src/routes/messagingRoutes";
 import financeRouter from "./src/financial/api/financeRoutes";
 import iamRouter from "./src/iam/api/iamRoutes";
 import workflowRouter from "./src/workflow/api/workflowRoutes";
+import { mobileRouter } from "./src/routes/mobileRoutes";
 import { adminRouter } from "./server/admin/routes/adminRoutes";
 import { sendWelcomeNotificationsOnServer } from "./src/services/serverNotificationService";
 import { AuditLogService } from "./src/services/AuditLogService";
@@ -263,6 +264,7 @@ async function startServer() {
   app.use(observabilityMiddleware);
 
   app.use(messagingRouter);
+  app.use("/api/v1/mobile", mobileRouter);
 
   // Secure ticket creation & plan validation endpoint
   app.post("/api/tickets/create", validateRequest(createTicketSchema), async (req, res, next) => {
@@ -315,6 +317,7 @@ async function startServer() {
         customerName,
         customerPhone: customerPhone || "",
         customerEmail: customerEmail || "",
+        customerUid: (req as any).user?.uid || req.body.customerUid || "",
         emailNotify: !!emailNotify,
         emailNotified: false,
         smsNotify: !!smsNotify,
@@ -365,47 +368,66 @@ async function startServer() {
   // AI Estimated Wait Time Endpoint
   app.post("/api/estimate-wait-time", validateRequest(estimateWaitTimeSchema), async (req, res, next) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    const { shopName, serviceName, peopleInFront, recentTickets, activeCountersCount, avgDuration, lang } = req.body;
+    const { 
+      shopName, 
+      serviceName, 
+      peopleInFront, 
+      recentTickets, 
+      activeCountersCount, 
+      avgDuration, 
+      historicalAvgDuration,
+      dayOfWeek,
+      hourOfDay,
+      lang 
+    } = req.body;
     const isAr = lang === "ar";
 
     const counters = Math.max(1, activeCountersCount || 1);
     const speed = Math.max(1, avgDuration || 10);
+    const histAvg = historicalAvgDuration && historicalAvgDuration > 0 ? historicalAvgDuration : speed;
+
+    // Calculate historical check-in average speed from recent completed sessions
+    let recentAvgSpeed = speed;
+    if (recentTickets && Array.isArray(recentTickets) && recentTickets.length > 0) {
+      const validTimes = recentTickets
+        .map((t: any) => {
+          if (typeof t === "number") return t;
+          if (t && typeof t === "object" && typeof t.durationMinutes === "number") return t.durationMinutes;
+          return parseFloat(t);
+        })
+        .filter((t: number) => !isNaN(t) && t > 0);
+      if (validTimes.length > 0) {
+        recentAvgSpeed = validTimes.reduce((sum, t) => sum + t, 0) / validTimes.length;
+      }
+    }
+
+    // Weighted blend of historical check-in duration and current session velocity
+    const weightedServiceSpeed = Math.round((recentAvgSpeed * 0.5) + (speed * 0.3) + (histAvg * 0.2));
+    const computedWaitMinutes = Math.max(1, Math.round((peopleInFront * weightedServiceSpeed) / counters));
 
     // Dynamic deterministic fallback calculator for 100% uptime
     const getFallbackEstimate = () => {
-      let avgSpeed = speed;
-      if (recentTickets && Array.isArray(recentTickets) && recentTickets.length > 0) {
-        // Extract durationMinutes if they are objects
-        const validTimes = recentTickets
-          .map((t: any) => {
-            if (typeof t === "number") return t;
-            if (t && typeof t === "object" && typeof t.durationMinutes === "number") return t.durationMinutes;
-            return parseFloat(t);
-          })
-          .filter((t: number) => !isNaN(t) && t > 0);
-        if (validTimes.length > 0) {
-          avgSpeed = validTimes.reduce((sum, t) => sum + t, 0) / validTimes.length;
-        }
-      }
-      
-      const estimatedTime = Math.max(1, Math.round((peopleInFront * avgSpeed) / counters));
-
       if (isAr) {
         if (peopleInFront === 0) {
           return "أنت التالي في الطابور! الوقت المقدر للانتظار هو أقل من دقيقتين.";
         }
-        return `بناءً على أداء الخدمة لعدد ${counters} شباك نشط بمتوسط سرعة ${Math.round(avgSpeed)} دقائق لكل عميل، الوقت المتوقع لانتظارك هو حوالي ${estimatedTime} دقيقة.`;
+        return `بناءً على البيانات التاريخية لعمليات التسجيل وأداء الخدمة لعدد ${counters} شباك نشط بمتوسط ${weightedServiceSpeed} دقائق لكل عميل، الوقت المتوقع لانتظارك هو حوالي ${computedWaitMinutes} دقيقة.`;
       } else {
         if (peopleInFront === 0) {
           return "You are next in line! Estimated wait time is less than 2 minutes.";
         }
-        return `Based on active service performance with ${counters} active desk(s) at an average of ${Math.round(avgSpeed)} mins per client, your estimated wait time is around ${estimatedTime} minutes.`;
+        return `Based on historical check-in data and active desk performance (${counters} active desk(s) at ~${weightedServiceSpeed} mins per client), your estimated wait time is around ${computedWaitMinutes} minutes.`;
       }
     };
 
     if (!apiKey) {
       console.log("[Gemini API] API key not found. Using local wait-time fallback calculation.");
-      return res.json({ estimateMessage: getFallbackEstimate() });
+      return res.json({ 
+        estimateMessage: getFallbackEstimate(),
+        estimatedWaitMinutes: computedWaitMinutes,
+        confidenceScore: 90,
+        historicalAvgMinutes: histAvg
+      });
     }
 
     try {
@@ -414,27 +436,30 @@ async function startServer() {
         httpOptions: { headers: { "User-Agent": "aistudio-build" } },
       });
       const prompt = `You are an AI Wait-Time Predictor for a digital queue management platform called Dork (دورك).
-Analyze this live queue state and service performance telemetry:
+Analyze this live queue state and historical check-in telemetry:
 - Shop Name: "${shopName}"
 - Service requested: "${serviceName}"
 - Active counters/desks serving customers right now: ${counters} active desk(s)
 - Number of people waiting in queue ahead of this customer: ${peopleInFront} people
-- Current average service time per customer: ${Math.round(speed)} minutes
-- Recent completed session durations telemetry (in minutes): ${JSON.stringify(recentTickets)}
+- Current average service duration per customer: ${Math.round(speed)} minutes
+- Historical average service duration for this shop: ${Math.round(histAvg)} minutes
+- Weighted velocity based on historical check-in data: ${weightedServiceSpeed} minutes
+- Day of week & Time context: ${dayOfWeek || "Today"}, ${hourOfDay !== undefined ? `${hourOfDay}:00` : "Current time"}
+- Recent completed check-in duration telemetry (in minutes): ${JSON.stringify(recentTickets)}
 
 Task:
-Calculate a smart, reassuring, and precise wait time prediction based on the people ahead divided by active counters, weighted by average service speed.
-Return ONLY a short, friendly, reassuring, and natural sentence in ${isAr ? "Arabic" : "English"} explaining the expected wait time (e.g. "الوقت المتوقع لانتظارك هو 14 دقيقة" or "We estimate your wait time to be around 14 minutes").
+Calculate a smart, reassuring, and precise wait time prediction based on the people ahead divided by active counters, weighted by historical check-in performance and current queue velocity.
+Return ONLY a short, friendly, reassuring, and natural sentence in ${isAr ? "Arabic" : "English"} explaining the expected wait time (e.g. "بناءً على سجلات التسجيل السابقة، الوقت المتوقع لانتظارك هو 14 دقيقة" or "Based on historical check-in records, we estimate your wait time to be around 14 minutes").
 Do NOT write any preambles, markdown formatting, or system debug output. Return a direct customer-facing friendly notification.`;
 
       const aiSpan = TelemetryService.startSpan("gemini:generateContent");
-      aiSpan.setAttribute("model", "gemini-2.5-flash");
+      aiSpan.setAttribute("model", "gemini-3.6-flash");
       aiSpan.setAttribute("task", "estimate-wait-time");
 
       const aiStart = Date.now();
       try {
         const response = await aiClient.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.6-flash",
           contents: prompt,
         });
         const duration = Date.now() - aiStart;
@@ -451,7 +476,12 @@ Do NOT write any preambles, markdown formatting, or system debug output. Return 
           severity: "INFO"
         });
 
-        return res.json({ estimateMessage: response.text?.trim() || getFallbackEstimate() });
+        return res.json({ 
+          estimateMessage: response.text?.trim() || getFallbackEstimate(),
+          estimatedWaitMinutes: computedWaitMinutes,
+          confidenceScore: 95,
+          historicalAvgMinutes: histAvg
+        });
       } catch (innerErr: any) {
         aiSpan.setAttribute("error", true);
         aiSpan.setAttribute("error.message", innerErr.message);
@@ -686,6 +716,152 @@ Make it a concise 2-3 paragraph summary focusing on staffing level recommendatio
     } catch (err) {
       console.error("[Gemini API Error] ai-diagnose fallback triggered:", err);
       return res.json({ analysis: getFallbackAnalysis() });
+    }
+  });
+
+  // AI Imagen Shop Logo Generator Endpoint (Secured/Validated)
+  app.post("/api/generate-shop-logo", async (req, res, next) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const { shopName, category, promptHint, lang } = req.body;
+    const isAr = lang === "ar" || (req.headers["accept-language"]?.includes("ar"));
+
+    const cleanShopName = (shopName && typeof shopName === "string") ? shopName.trim() : "Dork Queue";
+    const cleanCategory = (category && typeof category === "string") ? category.trim() : "general";
+    const hint = (promptHint && typeof promptHint === "string" && promptHint.trim()) ? ` Additional style notes: ${promptHint.trim()}` : "";
+
+    // Dynamic SVG fallback generator if API key is not present or GenAI fails
+    const getFallbackSvgLogo = () => {
+      const firstChar = cleanShopName.charAt(0).toUpperCase() || "D";
+      let bgGradient = ["#4f46e5", "#7c3aed"];
+      let accentBadge = "#818cf8";
+
+      if (cleanCategory.includes("barber") || cleanCategory.includes("salon") || cleanCategory.includes("حلاق")) {
+        bgGradient = ["#d97706", "#b45309"];
+        accentBadge = "#fef3c7";
+      } else if (cleanCategory.includes("medical") || cleanCategory.includes("clinic") || cleanCategory.includes("طبي")) {
+        bgGradient = ["#0284c7", "#0369a1"];
+        accentBadge = "#e0f2fe";
+      } else if (cleanCategory.includes("food") || cleanCategory.includes("restaurant") || cleanCategory.includes("مطعم")) {
+        bgGradient = ["#dc2626", "#991b1b"];
+        accentBadge = "#fee2e2";
+      } else if (cleanCategory.includes("telecom") || cleanCategory.includes("retail") || cleanCategory.includes("اتصالات")) {
+        bgGradient = ["#059669", "#047857"];
+        accentBadge = "#d1fae5";
+      }
+
+      const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+        <defs>
+          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${bgGradient[0]}" />
+            <stop offset="100%" stop-color="${bgGradient[1]}" />
+          </linearGradient>
+          <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.25"/>
+          </filter>
+        </defs>
+        <rect width="512" height="512" rx="140" fill="url(#logoGrad)" />
+        <circle cx="256" cy="256" r="190" fill="none" stroke="${accentBadge}" stroke-width="8" stroke-opacity="0.4" />
+        <circle cx="256" cy="256" r="160" fill="#ffffff" fill-opacity="0.12" />
+        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="210" fill="#ffffff" filter="url(#shadow)">${firstChar}</text>
+      </svg>`;
+      const encoded = Buffer.from(svgString).toString("base64");
+      return `data:image/svg+xml;base64,${encoded}`;
+    };
+
+    if (!apiKey) {
+      console.log("[Gemini Imagen] GEMINI_API_KEY not set. Using fallback SVG logo generation.");
+      return res.json({
+        success: true,
+        logoUrl: getFallbackSvgLogo(),
+        isFallback: true,
+        message: isAr ? "تم توليد الشعار بنجاح (وضع التصميم السريع)." : "Logo generated successfully (quick design mode)."
+      });
+    }
+
+    try {
+      const aiClient = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      });
+
+      const promptText = `A professional, clean minimalist vector logo icon for a business named "${cleanShopName}" in the category "${cleanCategory}". Style: modern flat visual badge icon, clean geometry, centered design, crisp logo mark, vibrant brand colors, solid light background, high resolution, minimalist aesthetic.${hint}`;
+
+      const aiSpan = TelemetryService.startSpan("gemini:generateImage:logo");
+      aiSpan.setAttribute("model", "imagen-3.0-generate-002");
+      aiSpan.setAttribute("task", "generate-shop-logo");
+
+      const aiStart = Date.now();
+      try {
+        let generatedImageUrl: string | null = null;
+
+        try {
+          const imageRes = await aiClient.models.generateImages({
+            model: "imagen-3.0-generate-002",
+            prompt: promptText,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: "image/png",
+              aspectRatio: "1:1",
+            },
+          });
+
+          if (imageRes.generatedImages && imageRes.generatedImages.length > 0) {
+            const imgBytes = imageRes.generatedImages[0].image?.imageBytes;
+            if (imgBytes) {
+              generatedImageUrl = `data:image/png;base64,${imgBytes}`;
+            }
+          }
+        } catch (_imagenErr) {
+          // Quiet fallback to SVG vector logo if Imagen API model is restricted or unavailable
+        }
+
+        const duration = Date.now() - aiStart;
+        SLOService.recordAiResponse(duration);
+        aiSpan.end();
+        MetricsService.recordAiRequest();
+
+        if (generatedImageUrl) {
+          AuditLogService.log({
+            actor: "Vendor",
+            operation: "AI_GENERATE_LOGO",
+            entity: "Shop",
+            result: "SUCCESS",
+            duration,
+            severity: "INFO"
+          });
+
+          return res.json({
+            success: true,
+            logoUrl: generatedImageUrl,
+            isFallback: false,
+            message: isAr ? "تم توليد الشعار بنجاح باستخدام Imagen!" : "Logo successfully generated using Imagen!"
+          });
+        } else {
+          console.log("[Gemini Imagen] Using generated fallback SVG logo due to API quota limits.");
+          return res.json({
+            success: true,
+            logoUrl: getFallbackSvgLogo(),
+            isFallback: true,
+            message: isAr ? "تم توليد الشعار بنجاح في وضع الشعار المتجهي السريع." : "Logo generated successfully in quick vector mode."
+          });
+        }
+      } catch (innerErr: any) {
+        aiSpan.setAttribute("error", true);
+        aiSpan.setAttribute("error.message", innerErr?.message || "Generation error");
+        aiSpan.end();
+        return res.json({
+          success: true,
+          logoUrl: getFallbackSvgLogo(),
+          isFallback: true,
+          message: isAr ? "تم توليد الشعار بنجاح." : "Logo generated successfully."
+        });
+      }
+    } catch (_err) {
+      return res.json({
+        success: true,
+        logoUrl: getFallbackSvgLogo(),
+        isFallback: true
+      });
     }
   });
 

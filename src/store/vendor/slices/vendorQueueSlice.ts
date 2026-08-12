@@ -166,6 +166,23 @@ export const createVendorQueueSlice: StateCreator<
         });
         if (result.success) {
           announceCallingTicket(String(nextWaiting.ticketNumber), activeCounterNumber, nextWaiting.serviceName);
+
+          if (nextWaiting.fcmToken) {
+            fetch("/api/send-fcm-alert", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fcmToken: nextWaiting.fcmToken,
+                shopName: shop?.name || "",
+                ticketNumber: nextWaiting.ticketNumber,
+                lang: "ar",
+                customTitle: "حان دورك الآن! 🔔",
+                customBody: activeCounterNumber
+                  ? `تفضل بالتوجه إلى كاونتر / شباك رقم ${activeCounterNumber} لدى ${shop?.name || ""} فوراً.`
+                  : `تفضل بالتوجه إلى كاونتر الخدمة لدى ${shop?.name || ""} فوراً.`
+              })
+            }).catch(err => console.warn("[FCM] Vendor dispatch alert warning:", err));
+          }
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `tickets/${nextWaiting.id}`);
@@ -189,6 +206,24 @@ export const createVendorQueueSlice: StateCreator<
       });
       if (result.success) {
         announceCallingTicket(String(ticket.ticketNumber), activeCounterNumber, ticket.serviceName);
+
+        const { shop } = get();
+        if (ticket.fcmToken) {
+          fetch("/api/send-fcm-alert", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fcmToken: ticket.fcmToken,
+              shopName: shop?.name || "",
+              ticketNumber: ticket.ticketNumber,
+              lang: "ar",
+              customTitle: "حان دورك الآن! 🔔",
+              customBody: activeCounterNumber
+                ? `تفضل بالتوجه إلى كاونتر / شباك رقم ${activeCounterNumber} لدى ${shop?.name || ""} فوراً.`
+                : `تفضل بالتوجه إلى كاونتر الخدمة لدى ${shop?.name || ""} فوراً.`
+            })
+          }).catch(err => console.warn("[FCM] Vendor dispatch alert warning:", err));
+        }
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `ticket/${ticket.id}`);
@@ -249,6 +284,17 @@ export const createVendorQueueSlice: StateCreator<
   updateTicketPriority: async (ticketId, currentPriority) => {
     const { handleTogglePriority } = get();
     await handleTogglePriority(ticketId, currentPriority);
+  },
+
+  clearWaitingTickets: async (shopId, serviceId) => {
+    set({ ticketsLoading: true });
+    try {
+      await vendorQueueRepository.clearWaitingTickets(shopId, serviceId);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `tickets_clear`);
+    } finally {
+      set({ ticketsLoading: false });
+    }
   },
 
   refreshQueue: () => {

@@ -1,9 +1,30 @@
 import { initializeApp } from "firebase/app";
+import * as firestoreModule from "firebase/firestore";
 import { initializeFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { getMessaging, isSupported } from "firebase/messaging";
+import { getMessaging, isSupported, onMessage } from "firebase/messaging";
 import { getAnalytics, logEvent, isSupported as isAnalyticsSupported } from "firebase/analytics";
 import config from "../../firebase-applet-config.json";
+
+// Suppress internal verbose Firestore SDK connection retry logs
+try {
+  if (firestoreModule && typeof (firestoreModule as any).setLogLevel === "function") {
+    (firestoreModule as any).setLogLevel("warn");
+  }
+} catch (_) {}
+
+// Intercept transient Firestore SDK stream disconnect logs in browser environment
+if (typeof window !== "undefined") {
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    const msg = args.map(a => (typeof a === "string" ? a : (a?.message || JSON.stringify(a)))).join(" ");
+    if (msg.includes("@firebase/firestore") && (msg.includes("GrpcConnection") || msg.includes("RST_STREAM") || msg.includes("Listen"))) {
+      console.warn("[Firestore Stream Reconnecting]:", ...args);
+      return;
+    }
+    originalConsoleError.apply(console, args);
+  };
+}
 
 const env = (import.meta as any).env || {};
 
@@ -32,7 +53,7 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with custom databaseId and long polling to bypass iframe/proxy connection blocks
+// Initialize Firestore with custom databaseId and long polling to handle iframe/proxy connection resets
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 }, firestoreDatabaseId);
@@ -117,6 +138,24 @@ export async function getFirebaseMessaging() {
     console.warn("Firebase Messaging is not supported or failed to initialize on this device:", err);
   }
   return null;
+}
+
+/**
+ * Attaches a foreground listener for incoming FCM Push notifications
+ */
+export async function listenToForegroundFcmMessages(callback: (payload: any) => void) {
+  try {
+    const msg = await getFirebaseMessaging();
+    if (msg) {
+      return onMessage(msg, (payload) => {
+        console.log("[FCM Foreground Message Received]:", payload);
+        callback(payload);
+      });
+    }
+  } catch (err) {
+    console.warn("[FCM] Failed to attach foreground message listener:", err);
+  }
+  return () => {};
 }
 
 export enum OperationType {

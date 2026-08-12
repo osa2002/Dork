@@ -13,13 +13,17 @@ import {
   getRunbooks,
   getRetentionPolicy,
   updateRetentionPolicy,
-  getGovernanceSummary
+  getGovernanceSummary,
+  getOperationalValidationReport,
+  executeOperationalValidation
 } from "../controllers/governanceController";
 
 const router = Router();
 
 // Enterprise Governance, Audit Logging & Disaster Recovery Backend Endpoints (Phase 6.1)
 router.get("/api/governance/summary", getGovernanceSummary);
+router.get("/api/governance/validation-report", getOperationalValidationReport);
+router.post("/api/governance/execute-validation", executeOperationalValidation);
 router.get("/api/governance/audit-logs", getAuditLogs);
 router.post("/api/governance/audit-logs", createAuditLog);
 router.get("/api/governance/incidents", getIncidents);

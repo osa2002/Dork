@@ -22,18 +22,18 @@ export const Breadcrumb: React.FC<IBreadcrumbProps> = ({ currentPath }) => {
   const matchedRoute = matchedKey ? ADMIN_ROUTES[matchedKey] : null;
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center text-xs text-slate-400 gap-2 py-1 select-none">
-      <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+    <nav aria-label="Breadcrumb" className="flex items-center text-xs text-slate-500 dark:text-slate-400 gap-2 py-1 select-none">
+      <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-semibold">
         <ShieldCheck className="w-3.5 h-3.5" />
         <span>Dork Enterprise Admin</span>
       </div>
 
-      <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0 rtl:rotate-180" />
+      <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0 rtl:rotate-180" />
 
       {matchedRoute ? (
-        <span className="text-slate-200 font-medium">{matchedRoute.breadcrumbLabel}</span>
+        <span className="text-slate-800 dark:text-slate-200 font-medium">{matchedRoute.breadcrumbLabel}</span>
       ) : (
-        <span className="text-slate-200 font-medium">Console</span>
+        <span className="text-slate-800 dark:text-slate-200 font-medium">Console</span>
       )}
     </nav>
   );

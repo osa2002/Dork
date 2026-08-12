@@ -6,6 +6,9 @@ import { DisasterRecoveryService } from "../services/DisasterRecoveryService";
 import { RetentionPolicyService } from "../services/RetentionPolicyService";
 import { runbooks } from "../docs/runbooks";
 import { MetricsService } from "../services/MetricsService";
+import { generateOperationalValidationReport } from "../docs/operationalValidationProgram";
+import { OperationalValidationSuite } from "../testing/suite/OperationalValidationSuite";
+import { EvidenceCollector } from "../testing/evidence/EvidenceCollector";
 
 /**
  * POST /api/governance/audit-logs
@@ -277,6 +280,76 @@ export function getGovernanceSummary(req: Request, res: Response, next: NextFunc
         lastBackupVerified: backupResult.success,
         missingBackupsDetected: backupResult.missingBackupsDetected,
         timestampCheck: backupResult.timestampCheck,
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/governance/validation-report
+ * Phase 18.1 Operational Validation Program report.
+ */
+export function getOperationalValidationReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const report = generateOperationalValidationReport();
+    const records = EvidenceCollector.getInstance().getAllRecords();
+
+    if (records.length > 0) {
+      // Merge real execution records into report
+      for (const rec of records) {
+        const comp = report.validatedComponents.find(c => c.componentId === rec.testId || c.componentId.includes(rec.category.toLowerCase()));
+        if (comp) {
+          comp.status = rec.status === "PASSED" ? "PASSED" : rec.status === "FAILED" ? "FAILED" : "WARNING";
+          comp.lastTestedIso = rec.executedAtIso;
+          comp.benchmarkMetrics = {
+            p95LatencyMs: rec.latency.p95Ms,
+            p99LatencyMs: rec.latency.p99Ms,
+            throughputRps: rec.throughputRps,
+            errorRatePercent: rec.requestsTotal > 0 ? Number(((rec.failedRequests / rec.requestsTotal) * 100).toFixed(2)) : 0
+          };
+          comp.evidence = `[REAL EXECUTION EVIDENCE] ${rec.testName} (${rec.category}): Status=${rec.status}, Requests=${rec.requestsTotal}, Duration=${rec.durationMs}ms`;
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      report,
+      realEvidenceCount: records.length,
+      realEvidenceRecords: records
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/governance/execute-validation
+ * Phase 18.3 REAL Operational Validation execution endpoint.
+ */
+export async function executeOperationalValidation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { runLoad = true, runStress = true, runChaos = true, runRecovery = true, tenantId = "default" } = req.body || {};
+    const suite = new OperationalValidationSuite();
+    const evidencePackage = await suite.runFullSuite({
+      runLoad,
+      runStress,
+      runChaos,
+      runRecovery,
+      tenantId
+    });
+
+    const collector = EvidenceCollector.getInstance();
+
+    res.status(200).json({
+      success: true,
+      evidencePackage,
+      exports: {
+        json: collector.exportAsJson(evidencePackage),
+        markdown: collector.exportAsMarkdown(evidencePackage),
+        csv: collector.exportAsCsv(evidencePackage)
       }
     });
   } catch (err) {

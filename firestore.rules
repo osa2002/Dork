@@ -45,12 +45,16 @@ service cloud.firestore {
 
     // 4. Tickets Collection
     match /tickets/{ticketId} {
-      allow read: if true; // Anyone can read/subscribe to tickets for a shop
-      allow create: if true; // Customers and demo vendors can create tickets
+      allow read: if true; // Anyone can read/subscribe to ticket status streams
+      allow create: if isShopOwner(request.resource.data.shopId) || 
+                       request.resource.data.shopId.matches('^demo_user_.*') || 
+                       exists(/databases/$(database)/documents/shops/server_cleanup/private/verification);
       allow update: if isShopOwner(resource.data.shopId) || (
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+                       request.auth != null &&
+                       (request.auth.uid == resource.data.customerUid || request.auth.uid == resource.data.shopId) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'cancellationReason']) &&
                        request.resource.data.status == 'cancelled' &&
-                       resource.data.status == 'waiting'
+                       (resource.data.status == 'waiting' || resource.data.status == 'scheduled')
                      );
       allow delete: if isShopOwner(resource.data.shopId) || exists(/databases/$(database)/documents/shops/server_cleanup/private/verification);
     }
@@ -102,6 +106,13 @@ service cloud.firestore {
       allow read: if isShopOwner(resource.data.shopId);
       allow create: if isShopOwner(request.resource.data.shopId);
       allow update, delete: if isShopOwner(resource.data.shopId);
+    }
+
+    // 12. FCM Tokens Collection
+    match /fcm_tokens/{tokenId} {
+      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isShopOwner(resource.data.uid));
+      allow create, update: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
   }
 }

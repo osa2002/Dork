@@ -63,10 +63,18 @@ export default function VendorDashboard({
   // Selected queue path filter
   const [selectedQueueServiceId, setSelectedQueueServiceId] = useState<string>("all");
 
-  const showConfirmation = (title: string, message: string, onConfirm: () => void) => {
+  const showConfirmation = (
+    title: string, 
+    message: string, 
+    onConfirm: () => void,
+    options?: { confirmText?: string; cancelText?: string; variant?: "danger" | "warning" | "info" }
+  ) => {
     setConfirmModal({
       title,
       message,
+      confirmText: options?.confirmText,
+      cancelText: options?.cancelText,
+      variant: options?.variant || "warning",
       onConfirm: () => {
         onConfirm();
         setConfirmModal(null);
@@ -125,8 +133,8 @@ export default function VendorDashboard({
   // Logout Click Handler
   const handleLogoutClick = () => {
     showConfirmation(
-      t("logout_confirm_title", "Sign Out"),
-      t("logout_confirm_body", "Are you sure you want to sign out from the queue management dashboard?"),
+      t("logout_confirm_title", "تأكيد تسجيل الخروج / Sign Out"),
+      t("logout_confirm_body", "هل أنت تأكد من رغبتك في تسجيل الخروج من لوحة إدارة قائمة الانتظار؟ / Are you sure you want to sign out from the queue management dashboard?"),
       async () => {
         try {
           await signOut(auth);
@@ -134,6 +142,11 @@ export default function VendorDashboard({
         } catch (err) {
           console.error("Error signing out:", err);
         }
+      },
+      {
+        confirmText: t("logout_confirm_btn", "تسجيل الخروج"),
+        cancelText: t("btn_cancel", "إلغاء"),
+        variant: "warning"
       }
     );
   };
@@ -386,6 +399,8 @@ export default function VendorDashboard({
                 handleCallTicket={tickets.handleCallTicket}
                 handleUpdateTicketStatus={tickets.handleUpdateTicketStatus}
                 handleTogglePriority={tickets.handleTogglePriority}
+                handleClearQueue={tickets.handleClearQueue}
+                showConfirmation={showConfirmation}
                 isRtl={isRtl}
               />
             )}
@@ -420,6 +435,10 @@ export default function VendorDashboard({
                 setEditShopLogoUrl={settings.setEditShopLogoUrl}
                 editShopTicketColor={settings.editShopTicketColor}
                 setEditShopTicketColor={settings.setEditShopTicketColor}
+                editDisplayBgTheme={settings.editDisplayBgTheme}
+                setEditDisplayBgTheme={settings.setEditDisplayBgTheme}
+                editDisplayAnimatedBg={settings.editDisplayAnimatedBg}
+                setEditDisplayAnimatedBg={settings.setEditDisplayAnimatedBg}
                 settingsSaving={settings.settingsSaving}
                 dragActive={settings.dragActive}
                 workingHoursEnabled={settings.workingHoursEnabled}

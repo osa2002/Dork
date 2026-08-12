@@ -19,6 +19,13 @@ interface QueueTabProps {
   handleCallTicket: (ticket: Ticket) => void;
   handleUpdateTicketStatus: (ticketId: string, status: "completed" | "cancelled" | "no_show" | "waiting") => void;
   handleTogglePriority: (ticketId: string, currentPriority: boolean) => void;
+  handleClearQueue: (serviceId?: string) => Promise<void>;
+  showConfirmation: (
+    title: string, 
+    message: string, 
+    onConfirm: () => void,
+    options?: { confirmText?: string; cancelText?: string; variant?: "danger" | "warning" | "info" }
+  ) => void;
   isRtl: boolean;
 }
 
@@ -35,6 +42,8 @@ export function QueueTab({
   handleCallTicket,
   handleUpdateTicketStatus,
   handleTogglePriority,
+  handleClearQueue,
+  showConfirmation,
   isRtl
 }: QueueTabProps) {
   const { t } = useTranslation();
@@ -111,41 +120,70 @@ export function QueueTab({
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedQueueServiceId("all")}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-200 cursor-pointer ${
-              selectedQueueServiceId === "all"
-                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none border border-transparent"
-                : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
-            }`}
-          >
-            {t("vend_all_waiting_paths", "All Waiting Paths")} ({waitingCount})
-          </button>
-          
-          {services.map((service) => {
-            const serviceWaitingCount = serviceWaitingCounts[service.id] || 0;
-            return (
-              <button
-                key={service.id}
-                onClick={() => setSelectedQueueServiceId(service.id)}
-                className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                  selectedQueueServiceId === service.id
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none border border-transparent"
-                    : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
-                }`}
-              >
-                <span>{service.name}</span>
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
-                  selectedQueueServiceId === service.id 
-                    ? "bg-white/20 text-white" 
-                    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                }`}>
-                  {serviceWaitingCount}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedQueueServiceId("all")}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-200 cursor-pointer ${
+                selectedQueueServiceId === "all"
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none border border-transparent"
+                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+              }`}
+            >
+              {t("vend_all_waiting_paths", "All Waiting Paths")} ({waitingCount})
+            </button>
+            
+            {services.map((service) => {
+              const serviceWaitingCount = serviceWaitingCounts[service.id] || 0;
+              return (
+                <button
+                  key={service.id}
+                  onClick={() => setSelectedQueueServiceId(service.id)}
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                    selectedQueueServiceId === service.id
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none border border-transparent"
+                      : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+                  }`}
+                >
+                  <span>{service.name}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                    selectedQueueServiceId === service.id 
+                      ? "bg-white/20 text-white" 
+                      : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                  }`}>
+                    {serviceWaitingCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {filteredWaitingTickets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const pathName = selectedQueueServiceId === "all"
+                  ? t("vend_all_paths", "جميع المسارات / All Paths")
+                  : (services.find(s => s.id === selectedQueueServiceId)?.name || "");
+                showConfirmation(
+                  t("clear_queue_confirm_title", "تأكيد حذف قائمة الانتظار"),
+                  t("clear_queue_confirm_body", "هل أنت تأكد من حذف وتصفير جميع التذاكر المنتظرة في قائمة الانتظار ({{path}})؟ لا يمكن التراجع عن هذا الإجراء.")
+                    .replace("{{path}}", pathName),
+                  () => handleClearQueue(selectedQueueServiceId),
+                  {
+                    confirmText: t("btn_clear_queue_confirm", "حذف قائمة الانتظار"),
+                    cancelText: t("btn_cancel", "تراجع"),
+                    variant: "danger"
+                  }
+                );
+              }}
+              className="px-3.5 py-2.5 rounded-2xl text-xs font-black bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40 transition-all cursor-pointer flex items-center gap-1.5 ms-auto"
+              title={t("clear_queue_btn_title", "حذف وتصفير قائمة الانتظار")}
+            >
+              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+              <span>{t("clear_queue_btn", "حذف قائمة الانتظار")}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -317,7 +355,18 @@ export function QueueTab({
               <button
                 onClick={() => {
                   if (activeCallingTicket) {
-                    handleUpdateTicketStatus(activeCallingTicket.id, "cancelled");
+                    showConfirmation(
+                      t("cancel_current_confirm_title", "تأكيد إلغاء الدور الحالي"),
+                      t("cancel_current_confirm_body", "هل أنت تأكد من إلغاء الدور الحالي للتذكرة رقم #{{number}} ({{name}})؟")
+                        .replace("{{number}}", String(activeCallingTicket.ticketNumber))
+                        .replace("{{name}}", activeCallingTicket.customerName),
+                      () => handleUpdateTicketStatus(activeCallingTicket.id, "cancelled"),
+                      {
+                        confirmText: t("btn_confirm_cancel_turn", "إلغاء الدور"),
+                        cancelText: t("btn_cancel", "تراجع"),
+                        variant: "danger"
+                      }
+                    );
                   } else {
                     alert(t("vend_no_active_called_ticket", "No active ticket is currently being called."));
                   }
@@ -395,9 +444,22 @@ export function QueueTab({
                       <Star className={`w-3.5 h-3.5 ${tItem.isPriority ? "fill-rose-500 text-rose-600" : ""}`} />
                     </button>
                     <button
-                      onClick={() => handleUpdateTicketStatus(tItem.id, "cancelled")}
+                      onClick={() => {
+                        showConfirmation(
+                          t("delete_ticket_confirm_title", "تأكيد إلغاء التذكرة"),
+                          t("delete_ticket_confirm_body", "هل أنت تأكد من إلغاء وحذف التذكرة رقم #{{number}} ({{name}}) من قائمة الانتظار؟")
+                            .replace("{{number}}", String(tItem.ticketNumber))
+                            .replace("{{name}}", tItem.customerName),
+                          () => handleUpdateTicketStatus(tItem.id, "cancelled"),
+                          {
+                            confirmText: t("btn_delete_confirm", "حذف التذكرة"),
+                            cancelText: t("btn_cancel", "إلغاء"),
+                            variant: "danger"
+                          }
+                        );
+                      }}
                       className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 border border-transparent transition-all cursor-pointer"
-                      title="Cancel"
+                      title={t("vend_cancel_ticket_title", "إلغاء التذكرة")}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -545,7 +607,21 @@ export function QueueTab({
                       {t("vend_check_in_btn", "Check In ✅")}
                     </button>
                     <button
-                      onClick={() => handleUpdateTicketStatus(tItem.id, "cancelled")}
+                      onClick={() => {
+                        showConfirmation(
+                          t("cancel_slot_confirm_title", "تأكيد إلغاء الموعد المحجوز"),
+                          t("cancel_slot_confirm_body", "هل أنت تأكد من إلغاء موعد العميل {{name}} المحجوز بتاريخ {{date}} في الساعة {{time}}؟")
+                            .replace("{{name}}", tItem.customerName)
+                            .replace("{{date}}", tItem.scheduledDate || "")
+                            .replace("{{time}}", tItem.scheduledTime || ""),
+                          () => handleUpdateTicketStatus(tItem.id, "cancelled"),
+                          {
+                            confirmText: t("btn_cancel_slot_confirm", "إلغاء الموعد"),
+                            cancelText: t("btn_cancel", "تراجع"),
+                            variant: "danger"
+                          }
+                        );
+                      }}
                       className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-500 font-extrabold text-[10px] py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer transition-all"
                       title={t("vend_cancel_slot_title", "Cancel Slot")}
                     >

@@ -309,6 +309,26 @@ export const vendorQueueRepository = {
       }
     });
     return didUpdate;
+  },
+
+  /**
+   * Clears (cancels) all waiting tickets for a shop or specific queue path service.
+   */
+  async clearWaitingTickets(shopId: string, serviceId?: string): Promise<void> {
+    const ticketsQuery = query(
+      collection(db, "tickets"),
+      where("shopId", "==", shopId),
+      where("status", "==", "waiting")
+    );
+    const snap = await getDocs(ticketsQuery);
+    const updatePromises: Promise<void>[] = [];
+    snap.forEach((docSnap) => {
+      const ticket = docSnap.data() as Ticket;
+      if (!serviceId || serviceId === "all" || ticket.serviceId === serviceId) {
+        updatePromises.push(updateDoc(doc(db, "tickets", docSnap.id), { status: "cancelled" }));
+      }
+    });
+    await Promise.all(updatePromises);
   }
 };
 

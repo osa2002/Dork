@@ -179,15 +179,15 @@ export async function sendSmsWhatsapp(req: Request, res: Response, next: NextFun
  * Dispatches Firebase Cloud Messaging mobile push notifications.
  */
 export async function sendFcmAlert(req: Request, res: Response, next: NextFunction) {
-  const { fcmToken, shopName, ticketNumber, lang } = req.body;
+  const { fcmToken, shopName, ticketNumber, lang, customTitle, customBody } = req.body;
 
   const isAr = lang === "ar";
-  const title = isAr
+  const title = customTitle || (isAr
     ? "تنبيه هام من دورك! 🔔"
-    : "Important Alert from Dork! 🔔";
-  const body = isAr
+    : "Important Alert from Dork! 🔔");
+  const body = customBody || (isAr
     ? `يتبقى شخص واحد فقط أمامك في طابور الانتظار لدى ${shopName || "المحل"}. يرجى التوجه فوراً!`
-    : `Only 1 person is left ahead of you in the queue at ${shopName || "the shop"}. Please head there immediately!`;
+    : `Only 1 person is left ahead of you in the queue at ${shopName || "the shop"}. Please head there immediately!`);
 
   console.log(`[FCM] Attempting to send FCM notification to token ${fcmToken.substring(0, 10)}...: "${title}" - "${body}"`);
 

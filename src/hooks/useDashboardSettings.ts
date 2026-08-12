@@ -20,6 +20,8 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
   const editShopCategory = useVendorStore((state) => state.editShopCategory);
   const editShopLogoUrl = useVendorStore((state) => state.editShopLogoUrl);
   const editShopTicketColor = useVendorStore((state) => state.editShopTicketColor);
+  const editDisplayBgTheme = useVendorStore((state) => state.editDisplayBgTheme);
+  const editDisplayAnimatedBg = useVendorStore((state) => state.editDisplayAnimatedBg);
   const settingsSaving = useVendorStore((state) => state.settingsSaving);
 
   const workingHoursEnabled = useVendorStore((state) => state.workingHoursEnabled);
@@ -34,6 +36,8 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
   const setEditShopCategory = useVendorStore((state) => state.setEditShopCategory);
   const setEditShopLogoUrl = useVendorStore((state) => state.setEditShopLogoUrl);
   const setEditShopTicketColor = useVendorStore((state) => state.setEditShopTicketColor);
+  const setEditDisplayBgTheme = useVendorStore((state) => state.setEditDisplayBgTheme);
+  const setEditDisplayAnimatedBg = useVendorStore((state) => state.setEditDisplayAnimatedBg);
   const setWorkingHoursEnabled = useVendorStore((state) => state.setWorkingHoursEnabled);
   const setWorkingHoursDays = useVendorStore((state) => state.setWorkingHoursDays);
 
@@ -210,6 +214,10 @@ export function useDashboardSettings({ shopId }: UseDashboardSettingsProps) {
     setEditShopLogoUrl,
     editShopTicketColor,
     setEditShopTicketColor,
+    editDisplayBgTheme,
+    setEditDisplayBgTheme,
+    editDisplayAnimatedBg,
+    setEditDisplayAnimatedBg,
     settingsSaving,
     dragActive,
     setDragActive,

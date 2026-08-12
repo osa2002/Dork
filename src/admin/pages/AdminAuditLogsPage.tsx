@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FileSpreadsheet,
   Search,
@@ -19,6 +20,7 @@ import { useAdminStore } from "../store/adminStore";
 import { IAuditLogEntryUI } from "../types/adminTypes";
 
 export const AdminAuditLogsPage: React.FC = () => {
+  const { t } = useTranslation();
   const fetchAuditLogs = useAdminStore((state) => state.fetchAuditLogs);
   const auditLogs = useAdminStore((state) => state.auditLogs);
   const auditLogsTotal = useAdminStore((state) => state.auditLogsTotal);
@@ -57,11 +59,11 @@ export const AdminAuditLogsPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Immutable Cryptographic Audit Ledger</span>
+            <span>{t("admin_audit_trail_title", "Security Audit Trail")}</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-100">Security Audit Trail</h1>
+          <h1 className="text-2xl font-black text-slate-100">{t("admin_audit_trail_title", "Security Audit Trail")}</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Immutable log of all administrative actions, configuration updates, and security events.
+            {t("admin_audit_trail_desc", "Immutable log of all administrative actions, configuration updates, and security events.")}
           </p>
         </div>
 
@@ -69,8 +71,8 @@ export const AdminAuditLogsPage: React.FC = () => {
           onClick={handleExportCSV}
           className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-2 border border-slate-700 cursor-pointer shrink-0"
         >
-          <Download className="w-4 h-4 text-indigo-400" />
-          <span>Export Audit Trail (CSV)</span>
+          <Download className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>{t("admin_export_csv", "Export Audit Trail (CSV)")}</span>
         </button>
       </div>
 
@@ -83,8 +85,8 @@ export const AdminAuditLogsPage: React.FC = () => {
               type="text"
               value={searchActor}
               onChange={(e) => setSearchActor(e.target.value)}
-              placeholder="Search by actor email or correlation ID..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              placeholder={t("admin_search_placeholder", "Search tenants, audit logs, IP addresses, secrets...")}
+              className="w-full pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
@@ -93,7 +95,7 @@ export const AdminAuditLogsPage: React.FC = () => {
             onChange={(e) => setFilterAction(e.target.value)}
             className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
           >
-            <option value="ALL">All Event Types</option>
+            <option value="ALL">{t("admin_all_statuses", "All Events")}</option>
             <option value="TENANT_STATUS_UPDATED">TENANT_STATUS_UPDATED</option>
             <option value="TENANT_PLAN_MIGRATED">TENANT_PLAN_MIGRATED</option>
             <option value="PLATFORM_CONFIG_UPDATED">PLATFORM_CONFIG_UPDATED</option>
@@ -101,13 +103,15 @@ export const AdminAuditLogsPage: React.FC = () => {
           </select>
         </div>
 
-        <span className="font-mono text-slate-400">Total Entries: {filteredLogs.length}</span>
+        <span className="font-mono text-slate-400">
+          {t("admin_showing", "Showing")} <span className="font-bold text-slate-100" dir="ltr">{filteredLogs.length}</span> {t("admin_of", "of")} <span dir="ltr">{auditLogsTotal || filteredLogs.length}</span>
+        </span>
       </div>
 
       {/* Table */}
       <div className="bg-slate-900 rounded-3xl border border-slate-800/80 shadow-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300 border-collapse">
+          <table className="w-full text-left rtl:text-right text-xs text-slate-300 border-collapse">
             <thead className="bg-slate-950/80 text-slate-400 font-bold border-b border-slate-800/80 uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="p-4">Timestamp</th>

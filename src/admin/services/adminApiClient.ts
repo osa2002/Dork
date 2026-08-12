@@ -35,6 +35,7 @@ export class AdminApiClient implements IAdminApiClientContract {
   private getHeaders(): HeadersInit {
     // Inject headers to simulate admin context if needed by middleware
     const localUser = localStorage.getItem("dork_admin_user");
+    const token = localStorage.getItem("dork_admin_token") || "dev-super-admin-token";
     let adminEmail = "admin@dork.platform";
     let adminRole = "SUPER_ADMIN";
 
@@ -50,6 +51,7 @@ export class AdminApiClient implements IAdminApiClientContract {
 
     return {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
       "x-admin-email": adminEmail,
       "x-admin-role": adminRole,
       "x-correlation-id": `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`

@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Activity,
   AlertTriangle,
@@ -22,6 +23,7 @@ import {
 import { useAdminStore } from "../store/adminStore";
 
 export const AdminMonitoringPage: React.FC = () => {
+  const { t } = useTranslation();
   const fetchDiagnostics = useAdminStore((state) => state.fetchDiagnostics);
   const diagnostics = useAdminStore((state) => state.diagnostics);
   const fetchIncidents = useAdminStore((state) => state.fetchIncidents);
@@ -93,9 +95,9 @@ export const AdminMonitoringPage: React.FC = () => {
             <Radio className="w-4 h-4" />
             <span>Cloud Run Operations & Observability</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-100">Monitoring & Incident Center</h1>
+          <h1 className="text-2xl font-black text-slate-100">{t("admin_nav_monitoring", "Monitoring & Incidents")}</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Live infrastructure diagnostics, incident lifecycle declaration, alert engine, and scheduled maintenance windows.
+            {t("admin_telemetry_desc", "Live infrastructure diagnostics, incident lifecycle declaration, alert engine, and scheduled maintenance windows.")}
           </p>
         </div>
 
@@ -105,7 +107,7 @@ export const AdminMonitoringPage: React.FC = () => {
             className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Declare Incident</span>
+            <span>{t("admin_declare_incident", "Declare Incident")}</span>
           </button>
         </div>
       </div>
@@ -118,7 +120,7 @@ export const AdminMonitoringPage: React.FC = () => {
             activeTab === "diagnostics" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-slate-400 hover:bg-slate-800"
           }`}
         >
-          Live Diagnostics
+          {t("admin_live_diagnostics", "Live Diagnostics")}
         </button>
         <button
           onClick={() => setActiveTab("incidents")}
@@ -126,7 +128,7 @@ export const AdminMonitoringPage: React.FC = () => {
             activeTab === "incidents" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-slate-400 hover:bg-slate-800"
           }`}
         >
-          <span>Incidents</span>
+          <span>{t("admin_incident_center", "Incidents")}</span>
           {incidents.filter((i) => i.status !== "RESOLVED").length > 0 && (
             <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono">
               {incidents.filter((i) => i.status !== "RESOLVED").length}
@@ -139,7 +141,7 @@ export const AdminMonitoringPage: React.FC = () => {
             activeTab === "alerts" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-slate-400 hover:bg-slate-800"
           }`}
         >
-          <span>Alert Rules</span>
+          <span>{t("admin_alert_rules", "Alert Rules")}</span>
           {alerts.filter((a) => a.status === "ACTIVE").length > 0 && (
             <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px]">
               {alerts.filter((a) => a.status === "ACTIVE").length}
@@ -152,7 +154,7 @@ export const AdminMonitoringPage: React.FC = () => {
             activeTab === "maintenance" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" : "text-slate-400 hover:bg-slate-800"
           }`}
         >
-          Maintenance Windows
+          {t("admin_maintenance_windows", "Maintenance Windows")}
         </button>
       </div>
 

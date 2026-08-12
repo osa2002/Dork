@@ -216,12 +216,20 @@ export function useDashboardTickets({
     await handleTogglePriority(ticketId, currentPriority);
   };
 
+  const clearWaitingTicketsStore = useVendorStore((state) => state.clearWaitingTickets);
+
+  const handleClearQueueWrapper = async (serviceId?: string) => {
+    if (!shopId) return;
+    await clearWaitingTicketsStore(shopId, serviceId);
+  };
+
   return {
     tickets,
     allTickets,
     handleCallNext,
     handleCallTicket: handleCallTicketWrapper,
     handleUpdateTicketStatus: handleUpdateTicketStatusWrapper,
-    handleTogglePriority: handleTogglePriorityWrapper
+    handleTogglePriority: handleTogglePriorityWrapper,
+    handleClearQueue: handleClearQueueWrapper
   };
 }

@@ -15,6 +15,9 @@ export interface UiState {
   confirmModal: {
     title: string;
     message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: "danger" | "warning" | "info";
     onConfirm: () => void;
   } | null;
 
@@ -30,7 +33,7 @@ export interface UiState {
   setDeferredPrompt: (prompt: any) => void;
   setIsStandalone: (standalone: boolean) => void;
   setActiveDashboardTab: (tab: "queue" | "services" | "qr" | "reports" | "displays" | "billing" | "webhooks") => void;
-  setConfirmModal: (modal: { title: string; message: string; onConfirm: () => void } | null) => void;
+  setConfirmModal: (modal: { title: string; message: string; confirmText?: string; cancelText?: string; variant?: "danger" | "warning" | "info"; onConfirm: () => void } | null) => void;
   resetUiStore: () => void;
 }
 

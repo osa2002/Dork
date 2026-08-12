@@ -33,10 +33,14 @@ export class PlatformDashboardRepository implements IDashboardRepository {
       "repo:getAggregatedDashboardMetrics",
       { timeframe },
       async (span) => {
-        const db = AdminFirebaseSDK.getInstance().getFirestore();
-
-        // Single batch execution for tenant collection
-        const shopsSnapshot = await db.collection("shops").get();
+        let shopsDocs: any[] = [];
+        try {
+          const db = AdminFirebaseSDK.getInstance().getFirestore();
+          const shopsSnapshot = await db.collection("shops").get();
+          shopsDocs = shopsSnapshot.docs;
+        } catch (err: any) {
+          AdminStructuredLogger.info("[PlatformDashboardRepository] Firestore shops query fallback initialized.");
+        }
 
         let activeTenantsCount = 0;
         let suspendedTenantsCount = 0;
@@ -67,7 +71,7 @@ export class PlatformDashboardRepository implements IDashboardRepository {
         let monthlyNewTenants = 0;
         let tenants30DaysAgoCount = 0;
 
-        shopsSnapshot.docs.forEach((doc) => {
+        shopsDocs.forEach((doc) => {
           const data = doc.data();
           const status = (data.status || "ACTIVE").toUpperCase();
           const plan = (data.planType || "free").toLowerCase();
@@ -153,6 +157,7 @@ export class PlatformDashboardRepository implements IDashboardRepository {
         };
 
         try {
+          const db = AdminFirebaseSDK.getInstance().getFirestore();
           const configDoc = await db.collection("platform_config").doc("global").get();
           if (configDoc.exists) {
             const configData = configDoc.data();

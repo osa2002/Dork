@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, listenToForegroundFcmMessages } from "../lib/firebase";
 import { Ticket, Shop } from "../types";
 import { useNotificationStore } from "../store/notificationStore";
+import { playChime } from "../lib/audio";
 
 export function useCustomerNotifications(myTicket: Ticket | null, shop: Shop | null, isRtl: boolean) {
   const pushPermission = useNotificationStore((s) => s.pushPermission);
@@ -58,6 +59,41 @@ export function useCustomerNotifications(myTicket: Ticket | null, shop: Shop | n
       });
     }
   }, [myTicket?.id, fcmToken, fetchFcmToken]);
+
+  // Listen for foreground FCM push notifications
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    listenToForegroundFcmMessages((payload) => {
+      if (soundEnabledRef.current) {
+        playChime();
+      }
+      if (payload?.notification) {
+        const title = payload.notification.title || (isRtl ? "تنبيه دورك! 🔔" : "Queue Alert! 🔔");
+        const message = payload.notification.body || "";
+        
+        setInAppAlert({
+          show: true,
+          title,
+          message,
+          type: "next"
+        });
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          try {
+            new Notification(title, { body: message, tag: "dork-fcm-foreground" });
+          } catch (e) {
+            console.warn("Foreground notification display fallback:", e);
+          }
+        }
+      }
+    }).then((unsubscribeFn) => {
+      unsub = unsubscribeFn;
+    });
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [isRtl, setInAppAlert]);
 
   return {
     pushPermission,

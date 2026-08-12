@@ -4,6 +4,7 @@
  */
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
   Building2,
@@ -25,6 +26,7 @@ interface ISidebarProps {
 }
 
 export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
+  const { t } = useTranslation();
   const activePath = useAdminStore((state) => state.activePath);
   const sidebarCollapsed = useAdminStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAdminStore((state) => state.setSidebarCollapsed);
@@ -40,18 +42,18 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
 
   const navGroups = [
     {
-      groupLabel: "Core Operations",
+      groupLabel: t("admin_nav_dashboard", "Global Operations"),
       items: [
         {
           key: "DASHBOARD",
-          label: ADMIN_ROUTES.DASHBOARD.name,
+          label: t("admin_nav_dashboard", "Global Operations"),
           path: ADMIN_ROUTES.DASHBOARD.path,
           icon: LayoutDashboard,
           permission: ADMIN_ROUTES.DASHBOARD.requiredPermission
         },
         {
           key: "TENANTS",
-          label: ADMIN_ROUTES.TENANTS.name,
+          label: t("admin_nav_tenants", "Tenants Management"),
           path: ADMIN_ROUTES.TENANTS.path,
           icon: Building2,
           permission: ADMIN_ROUTES.TENANTS.requiredPermission
@@ -59,11 +61,11 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
       ]
     },
     {
-      groupLabel: "Observability & Control",
+      groupLabel: t("admin_nav_monitoring", "Observability & Control"),
       items: [
         {
           key: "MONITORING",
-          label: "Monitoring & Incidents",
+          label: t("admin_nav_monitoring", "Monitoring & Incidents"),
           path: "/admin/monitoring",
           icon: Activity,
           permission: "metrics:read_system" as const,
@@ -71,7 +73,7 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
         },
         {
           key: "SECURITY",
-          label: "Security & Governance",
+          label: t("admin_nav_security", "Security & Governance"),
           path: "/admin/security",
           icon: ShieldCheck,
           permission: "security:read" as const,
@@ -80,18 +82,18 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
       ]
     },
     {
-      groupLabel: "Platform Management",
+      groupLabel: t("admin_nav_config", "Platform Management"),
       items: [
         {
           key: "PLATFORM_CONFIG",
-          label: ADMIN_ROUTES.PLATFORM_CONFIG.name,
+          label: t("admin_nav_config", "Platform Config"),
           path: ADMIN_ROUTES.PLATFORM_CONFIG.path,
           icon: Sliders,
           permission: ADMIN_ROUTES.PLATFORM_CONFIG.requiredPermission
         },
         {
           key: "AUDIT_LOGS",
-          label: ADMIN_ROUTES.AUDIT_LOGS.name,
+          label: t("admin_nav_audit_logs", "Audit Logs"),
           path: ADMIN_ROUTES.AUDIT_LOGS.path,
           icon: FileSpreadsheet,
           permission: ADMIN_ROUTES.AUDIT_LOGS.requiredPermission
@@ -106,17 +108,17 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
   };
 
   const navContent = (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-300 border-r border-slate-800/80 transition-all duration-300 select-none">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-r rtl:border-r-0 rtl:border-l border-slate-200 dark:border-slate-800/80 transition-all duration-300 select-none">
       {/* Brand Header */}
-      <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           {!sidebarCollapsed && (
             <div className="flex flex-col">
-              <span className="font-bold text-sm text-slate-100 tracking-wide">Dork Admin</span>
-              <span className="text-[10px] text-indigo-400 font-medium">Enterprise Control Plane</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-slate-100 tracking-wide">Dork Admin</span>
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">Enterprise Control Plane</span>
             </div>
           )}
         </div>
@@ -124,7 +126,7 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
         {/* Desktop Collapse Toggle Button */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="hidden lg:flex p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+          className="hidden lg:flex p-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors cursor-pointer"
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {sidebarCollapsed ? <ChevronRight className="w-4 h-4 rtl:rotate-180" /> : <ChevronLeft className="w-4 h-4 rtl:rotate-180" />}
@@ -133,18 +135,18 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
         {/* Mobile Close Button */}
         <button
           onClick={() => setMobileDrawerOpen(false)}
-          className="lg:hidden p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+          className="lg:hidden p-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
+      <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
         {navGroups.map((group, idx) => (
           <div key={idx} className="space-y-1">
             {!sidebarCollapsed && (
-              <h4 className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+              <h4 className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
                 {group.groupLabel}
               </h4>
             )}
@@ -163,16 +165,16 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
                   onClick={() => handleItemClick(item.path)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     isSelected
-                      ? "bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 shadow-md shadow-indigo-950/40"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-slate-200 border border-transparent"
+                      ? "bg-indigo-50 dark:bg-indigo-600/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 shadow-sm dark:shadow-md dark:shadow-indigo-950/40"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-200 border border-transparent"
                   }`}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isSelected ? "text-indigo-400" : "text-slate-400"}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"}`} />
                   {!sidebarCollapsed && <span className="truncate flex-1 text-left rtl:text-right">{item.label}</span>}
                   
                   {item.badgeCount && item.badgeCount > 0 ? (
-                    <span className="px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[10px] border border-rose-500/30 font-bold shrink-0">
+                    <span className="px-1.5 py-0.5 rounded-full bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-300 font-mono text-[10px] border border-rose-500/20 dark:border-rose-500/30 font-bold shrink-0">
                       {item.badgeCount}
                     </span>
                   ) : null}
@@ -185,10 +187,10 @@ export const Sidebar: React.FC<ISidebarProps> = ({ onNavigate }) => {
 
       {/* Footer Info */}
       {!sidebarCollapsed && (
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 text-[11px] text-slate-500 flex items-center justify-between">
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/60 text-[11px] text-slate-500 flex items-center justify-between">
           <span>Version v2.8.0-enterprise</span>
-          <span className="flex items-center gap-1 text-emerald-400 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>
             Cloud Run
           </span>
         </div>

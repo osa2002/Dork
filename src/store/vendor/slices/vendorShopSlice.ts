@@ -70,6 +70,8 @@ export const createVendorShopSlice: StateCreator<
           editShopCategory: category,
           editShopLogoUrl: data.logoUrl || "",
           editShopTicketColor: data.ticketColor || "#4f46e5",
+          editDisplayBgTheme: data.displayBgTheme || "aurora",
+          editDisplayAnimatedBg: data.displayAnimatedBg ?? true,
           workingHoursEnabled: data.workingHours?.enabled || false,
           workingHoursDays: data.workingHours?.days || {
             "0": { enabled: true, open: "09:00", close: "22:00" },

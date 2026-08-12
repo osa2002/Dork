@@ -45,6 +45,127 @@ interface CounterStatus {
   updatedAt: string;
 }
 
+function AnimatedDisplayBackground({ theme, enabled }: { theme: string; enabled: boolean }) {
+  if (!enabled || theme === "slate") {
+    return (
+      <div className="absolute inset-0 bg-slate-950 -z-10" />
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10 bg-slate-950">
+      {/* Theme 1: Aurora Dynamics */}
+      {theme === "aurora" && (
+        <>
+          <motion.div
+            animate={{
+              x: [0, 80, -40, 0],
+              y: [0, -60, 40, 0],
+              scale: [1, 1.25, 0.9, 1],
+            }}
+            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-32 -start-32 w-[650px] h-[650px] rounded-full bg-gradient-to-tr from-indigo-600/35 via-purple-600/25 to-blue-600/15 blur-[130px]"
+          />
+          <motion.div
+            animate={{
+              x: [0, -90, 60, 0],
+              y: [0, 80, -50, 0],
+              scale: [1, 1.3, 0.85, 1],
+            }}
+            transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/3 -end-32 w-[700px] h-[700px] rounded-full bg-gradient-to-bl from-purple-600/30 via-pink-600/20 to-indigo-700/15 blur-[140px]"
+          />
+          <motion.div
+            animate={{
+              x: [0, 70, -70, 0],
+              y: [0, 50, -60, 0],
+              scale: [0.9, 1.25, 1, 0.9],
+            }}
+            transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -bottom-32 start-1/4 w-[750px] h-[750px] rounded-full bg-gradient-to-t from-blue-700/25 via-indigo-900/35 to-purple-800/15 blur-[150px]"
+          />
+        </>
+      )}
+
+      {/* Theme 2: Cyber Matrix Grid */}
+      {theme === "cyber" && (
+        <>
+          <div 
+            className="absolute inset-0 opacity-25"
+            style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, rgba(56, 189, 248, 0.4) 1px, transparent 0)`,
+              backgroundSize: "40px 40px"
+            }}
+          />
+          <motion.div
+            animate={{ y: ["-100%", "200%"] }}
+            transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-x-0 h-48 bg-gradient-to-b from-transparent via-cyan-500/15 to-transparent blur-md"
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.4, 0.2],
+            }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-cyan-600/20 blur-[160px]"
+          />
+        </>
+      )}
+
+      {/* Theme 3: Laser Fluid Waves */}
+      {theme === "waves" && (
+        <>
+          <motion.div
+            animate={{
+              rotate: [0, 360],
+              scale: [1, 1.15, 0.95, 1],
+            }}
+            transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+            className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] opacity-30"
+            style={{
+              background: `radial-gradient(ellipse at center, rgba(16, 185, 129, 0.3) 0%, rgba(20, 184, 166, 0.18) 45%, transparent 70%)`
+            }}
+          />
+          <motion.div
+            animate={{
+              x: ["-20%", "20%", "-20%"],
+              y: ["-10%", "10%", "-10%"],
+            }}
+            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute bottom-0 inset-x-0 h-[600px] bg-gradient-to-t from-teal-900/40 via-emerald-800/20 to-transparent blur-[120px]"
+          />
+        </>
+      )}
+
+      {/* Theme 4: Floating Mesh Orbs */}
+      {theme === "mesh" && (
+        <>
+          <motion.div
+            animate={{
+              x: [0, 120, -60, 0],
+              y: [0, 80, -90, 0],
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-10 start-10 w-[500px] h-[500px] rounded-full bg-rose-600/25 blur-[120px]"
+          />
+          <motion.div
+            animate={{
+              x: [0, -100, 80, 0],
+              y: [0, -70, 60, 0],
+            }}
+            transition={{ duration: 19, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute bottom-10 end-10 w-[600px] h-[600px] rounded-full bg-purple-600/30 blur-[130px]"
+          />
+        </>
+      )}
+
+      {/* Grid Pattern overlay for high contrast depth */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b18_1px,transparent_1px),linear-gradient(to_bottom,#1e293b18_1px,transparent_1px)] bg-[size:3.5rem_3.5rem]" />
+    </div>
+  );
+}
+
 export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setIsDarkMode }: PublicDisplayProps) {
   const { t, i18n } = useTranslation();
   const isRtl = (i18n.language || "ar").startsWith("ar");
@@ -303,6 +424,49 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
   });
   const [showAudioSettings, setShowAudioSettings] = useState(false);
 
+  // Animated Display Background States
+  const [animatedBgEnabled, setAnimatedBgEnabled] = useState<boolean>(() => {
+    const localVal = localStorage.getItem(`dork_display_animated_bg_${shopSlug}`);
+    if (localVal !== null) return localVal === "true";
+    return true;
+  });
+
+  const [currentBgTheme, setCurrentBgTheme] = useState<string>(() => {
+    return localStorage.getItem(`dork_display_bg_theme_${shopSlug}`) || "aurora";
+  });
+
+  // Sync with shop settings when loaded
+  useEffect(() => {
+    if (shop) {
+      if (localStorage.getItem(`dork_display_animated_bg_${shopSlug}`) === null && shop.displayAnimatedBg !== undefined) {
+        setAnimatedBgEnabled(shop.displayAnimatedBg);
+      }
+      if (localStorage.getItem(`dork_display_bg_theme_${shopSlug}`) === null && shop.displayBgTheme) {
+        setCurrentBgTheme(shop.displayBgTheme);
+      }
+    }
+  }, [shop, shopSlug]);
+
+  const handleToggleAnimatedBg = (enabled: boolean) => {
+    setAnimatedBgEnabled(enabled);
+    localStorage.setItem(`dork_display_animated_bg_${shopSlug}`, String(enabled));
+    if (shop?.id) {
+      setDoc(doc(db, "shops", shop.id), { displayAnimatedBg: enabled }, { merge: true }).catch(err => {
+        console.warn("Error persisting animated bg to Firestore:", err);
+      });
+    }
+  };
+
+  const handleSetBgTheme = (theme: string) => {
+    setCurrentBgTheme(theme);
+    localStorage.setItem(`dork_display_bg_theme_${shopSlug}`, theme);
+    if (shop?.id) {
+      setDoc(doc(db, "shops", shop.id), { displayBgTheme: theme }, { merge: true }).catch(err => {
+        console.warn("Error persisting bg theme to Firestore:", err);
+      });
+    }
+  };
+
   // TV Mode and visual flash states
   const [isTvMode, setIsTvMode] = useState<boolean>(() => {
     return localStorage.getItem(`dork_display_tv_mode_${shopSlug}`) === "true";
@@ -451,6 +615,8 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
           }
         }
       }
+    }, (error) => {
+      console.warn("PublicDisplay: Error listening to display doc:", error);
     });
 
     return () => {
@@ -584,6 +750,8 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
       // Sort by counterNumber
       list.sort((a, b) => a.counterNumber.localeCompare(b.counterNumber, undefined, { numeric: true, sensitivity: 'base' }));
       setCounterStatuses(list);
+    }, (error) => {
+      console.warn("PublicDisplay: Error listening to counter statuses:", error);
     });
 
     return () => unsubStatuses();
@@ -713,8 +881,11 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
   });
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-white flex flex-col select-none overflow-hidden ${isRtl ? "font-sans dir-rtl text-right" : "font-sans dir-ltr text-left"}`}>
+    <div className={`min-h-screen bg-slate-950 text-white flex flex-col select-none overflow-hidden relative ${isRtl ? "font-sans dir-rtl text-right" : "font-sans dir-ltr text-left"}`}>
       
+      {/* Animated Background Canvas Layer */}
+      <AnimatedDisplayBackground theme={currentBgTheme} enabled={animatedBgEnabled} />
+
       {/* Top Header Panel */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-lg shrink-0">
         <div className="flex items-center gap-4">
@@ -941,6 +1112,46 @@ export default function PublicDisplay({ shopSlug, onBackToHome, isDarkMode, setI
                     >
                       {t_display("stop_current_speech", "Stop Current Speech ⏹️")}
                     </button>
+
+                    {/* Animated Background Section */}
+                    <div className="border-t border-slate-800/80 pt-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-extrabold text-white flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-indigo-400" />
+                            {isRtl ? "الخلفية المتحركة" : "Animated Background"}
+                          </span>
+                          <span className="text-[10px] text-slate-500">{isRtl ? "تأثيرات ضوئية انسيابية" : "Fluid visual effects"}</span>
+                        </div>
+                        <input 
+                          type="checkbox"
+                          checked={animatedBgEnabled}
+                          onChange={(e) => handleToggleAnimatedBg(e.target.checked)}
+                          className="accent-indigo-500 cursor-pointer"
+                          id="popover-toggle-animated-bg"
+                        />
+                      </div>
+
+                      {animatedBgEnabled && (
+                        <div className="space-y-1 pt-1">
+                          <label className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
+                            {isRtl ? "نمط الخلفية" : "Background Theme"}
+                          </label>
+                          <select
+                            value={currentBgTheme}
+                            onChange={(e) => handleSetBgTheme(e.target.value)}
+                            className="w-full bg-slate-800 text-slate-200 border border-slate-700/80 px-2.5 py-1.5 rounded-xl text-xs focus:outline-none"
+                            id="popover-select-bg-theme"
+                          >
+                            <option value="aurora">{isRtl ? "🌌 شفق قطبي (Aurora)" : "🌌 Aurora Dynamics"}</option>
+                            <option value="cyber">{isRtl ? "⚡ شبكة سيبرانية (Cyber Grid)" : "⚡ Cyber Matrix Grid"}</option>
+                            <option value="waves">{isRtl ? "🌊 أمواج نيون (Laser Waves)" : "🌊 Laser Fluid Waves"}</option>
+                            <option value="mesh">{isRtl ? "✨ كرات عائمة (Glowing Orbs)" : "✨ Floating Mesh Orbs"}</option>
+                            <option value="slate">{isRtl ? "🖤 داكن هادئ (Minimal Dark)" : "🖤 Minimal Dark"}</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

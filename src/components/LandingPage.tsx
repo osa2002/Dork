@@ -18,7 +18,8 @@ import {
   Printer,
   HelpCircle,
   Download,
-  Loader2
+  Loader2,
+  Shield
 } from "lucide-react";
 import { PlanItem, FAQItem } from "../types";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -53,9 +54,10 @@ interface LandingPageProps {
   isDarkMode: boolean;
   setIsDarkMode: (val: boolean) => void;
   onJoinShop: (slug: string) => void;
+  onOpenAdmin?: () => void;
 }
 
-export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, isDarkMode, setIsDarkMode, onJoinShop }: LandingPageProps) {
+export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, isDarkMode, setIsDarkMode, onJoinShop, onOpenAdmin }: LandingPageProps) {
   const { t, i18n } = useTranslation();
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
@@ -204,6 +206,17 @@ export default function LandingPage({ onStart, onGoToDashboard, userLoggedIn, is
 
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
+
+            {/* Admin Control Panel Header Action */}
+            {onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center cursor-pointer shadow-sm hover:scale-105"
+                title={isRtl ? "لوحة التحكم Admin" : "Admin Panel"}
+              >
+                <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              </button>
+            )}
 
             {/* Built-in QR Scanner Header Action */}
             <button

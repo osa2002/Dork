@@ -354,12 +354,14 @@ export function useCustomerTicket({
     try {
       const recentTickets = todayTickets
         .filter((t) => t.status === "completed" && t.calledAt && t.completedAt)
-        .slice(-10)
+        .slice(-15)
         .map((t) => ({
-          durationMinutes: Math.round((new Date(t.completedAt).getTime() - new Date(t.calledAt).getTime()) / 60000),
+          durationMinutes: Math.round((new Date(t.completedAt!).getTime() - new Date(t.calledAt!).getTime()) / 60000),
           serviceName: t.serviceName,
+          checkInTime: t.createdAt || t.calledAt,
         }));
 
+      const now = new Date();
       const response = await fetch("/api/estimate-wait-time", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -370,6 +372,9 @@ export function useCustomerTicket({
           recentTickets,
           activeCountersCount,
           avgDuration: calculatedAvgServiceTime,
+          historicalAvgDuration: historicalAvgDuration || undefined,
+          dayOfWeek: now.toLocaleDateString("en-US", { weekday: "long" }),
+          hourOfDay: now.getHours(),
           lang: isRtl ? "ar" : "en",
         }),
       });
@@ -462,6 +467,26 @@ export function useCustomerTicket({
     }
   };
 
+  const sendFcmPushNotification = async (token: string, shopName: string, ticketNumber: number | string, isRtl: boolean, title?: string, body?: string) => {
+    try {
+      const response = await fetch("/api/send-fcm-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fcmToken: token,
+          shopName,
+          ticketNumber,
+          lang: isRtl ? "ar" : "en",
+          customTitle: title,
+          customBody: body
+        }),
+      });
+      return response.ok ? await response.json() : null;
+    } catch (err) {
+      console.error("Failed to send FCM push notification:", err);
+    }
+  };
+
   // TRIGGER REAL-TIME PUSH/FCM/EMAIL NOTIFICATIONS WHEN ROLLING TO APPROACHING
   useEffect(() => {
     if (!shop || todayTickets.length === 0 || !myTicket) return;
@@ -481,6 +506,8 @@ export function useCustomerTicket({
     const countAhead = activeWaiting.length;
 
     if (myTicket.status === "waiting") {
+      const targetFcmToken = myTicket.fcmToken || fcmToken;
+
       // EXACTLY 2 PEOPLE AHEAD -> APPROACHING ALERT
       if (countAhead === 2 && !hasShownApproachingPush) {
         setHasShownApproachingPush(true);
@@ -501,6 +528,19 @@ export function useCustomerTicket({
           sendApproachingSmsWhatsappNotification(myTicket, shop.name, "whatsapp", isRtl).then(() => {
             updateDoc(doc(db, "tickets", myTicket.id), { whatsappNotified: true }).catch(() => {});
           });
+        }
+
+        if (targetFcmToken) {
+          sendFcmPushNotification(
+            targetFcmToken,
+            shop.name,
+            myTicket.ticketNumber,
+            isRtl,
+            isRtl ? "اقترب دورك في الطابور! ⏳" : "Your turn is approaching! ⏳",
+            isRtl
+              ? `يتبقى شخصان فقط أمامك في طابور الانتظار لدى ${shop.name}. يرجى التواجد بالقرب.`
+              : `There are only 2 people ahead of you in the queue at ${shop.name}. Please stay close.`
+          );
         }
 
         if ("Notification" in window && Notification.permission === "granted") {
@@ -540,6 +580,19 @@ export function useCustomerTicket({
           });
         }
 
+        if (targetFcmToken) {
+          sendFcmPushNotification(
+            targetFcmToken,
+            shop.name,
+            myTicket.ticketNumber,
+            isRtl,
+            isRtl ? "أنت التالي في الطابور! 🚨" : "You are next in line! 🚨",
+            isRtl
+              ? `يتبقى شخص واحد فقط أمامك في طابور الانتظار لدى ${shop.name}. يرجى التوجه فوراً!`
+              : `There is only 1 person ahead of you in the queue at ${shop.name}. Please proceed immediately!`
+          );
+        }
+
         if ("Notification" in window && Notification.permission === "granted") {
           try {
             new Notification(
@@ -567,7 +620,7 @@ export function useCustomerTicket({
         });
       }
     }
-  }, [todayTickets, myTicket, shop, isRtl, hasShownApproachingPush, hasShownOneInFrontFcm]);
+  }, [todayTickets, myTicket, shop, isRtl, hasShownApproachingPush, hasShownOneInFrontFcm, fcmToken]);
 
   return {
     myTicket,

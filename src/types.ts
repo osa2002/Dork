@@ -21,6 +21,8 @@ export interface Shop {
   logoText?: string;
 
   ticketColor?: string;
+  displayBgTheme?: string;
+  displayAnimatedBg?: boolean;
   plan?: "free" | "pro";
   planExpiresAt?: string;
   isPaused?: boolean;
@@ -68,6 +70,7 @@ export interface Ticket {
   scheduledDate?: string;
   scheduledTime?: string;
   fcmToken?: string;
+  fcmNotified?: boolean;
 }
 
 export interface FAQItem {

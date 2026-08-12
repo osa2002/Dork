@@ -257,7 +257,7 @@ export default function App() {
 
         // 1.8. Enterprise Platform Admin UI
         if (currentPage === "admin") {
-          return <AdminRouter />;
+          return <AdminRouter onBackToHome={handleBackToHome} />;
         }
 
         // 2. Vendor Dashboard / Auth screen
@@ -292,6 +292,7 @@ export default function App() {
             isDarkMode={isDarkMode}
             setIsDarkMode={setIsDarkMode}
             onJoinShop={(slug) => navigateTo(null, slug)}
+            onOpenAdmin={() => navigateTo("admin")}
           />
         );
       })()}
