@@ -5,9 +5,12 @@
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertOctagon, RotateCcw } from "lucide-react";
+import { ClientLogger } from "../../lib/clientLogger";
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
+  onReset?: () => void;
 }
 
 interface State {
@@ -18,7 +21,7 @@ interface State {
 export class AdminErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
-    error: null
+    error: null,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -26,18 +29,36 @@ export class AdminErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[AdminErrorBoundary] Uncaught React Error:", error, errorInfo);
+    ClientLogger.error("[AdminErrorBoundary] Uncaught React Error:", error, {
+      componentStack: errorInfo.componentStack,
+    });
+    ClientLogger.captureException(error, {
+      component: "AdminErrorBoundary",
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   private handleReset = () => {
+    if (this.props.onReset) {
+      this.props.onReset();
+    }
     this.setState({ hasError: false, error: null });
-    window.location.reload();
+    if (typeof window !== "undefined" && !this.props.onReset) {
+      window.location.reload();
+    }
   };
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
       return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div
+          id="admin-error-boundary"
+          className="min-h-[50vh] bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center font-sans rounded-2xl border border-slate-800 my-4"
+        >
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-6">
             <AlertOctagon className="w-8 h-8 text-rose-400" />
           </div>
@@ -51,6 +72,7 @@ export class AdminErrorBoundary extends Component<Props, State> {
             </div>
           )}
           <button
+            id="btn-admin-error-reload"
             onClick={this.handleReset}
             className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
           >
@@ -64,3 +86,6 @@ export class AdminErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export default AdminErrorBoundary;
+

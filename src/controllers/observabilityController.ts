@@ -85,7 +85,7 @@ export function getLive(req: Request, res: Response) {
  */
 export async function getReady(req: Request, res: Response) {
   try {
-    const diagnostics = ConfigValidator.validate();
+    const diagnostics = ConfigValidator.validate({ silent: true });
     const provider = await getDatabaseProvider();
     const isDbProviderActive = !!provider;
 

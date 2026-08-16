@@ -8,17 +8,24 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+export interface ValidationOptions {
+  silent?: boolean;
+}
+
 export class ConfigValidator {
   /**
    * Run all startup validation checks.
    * Throws a descriptive Error if validation fails in production mode.
    */
-  public static validate(): ValidationResult {
+  public static validate(options?: ValidationOptions): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
     const isProduction = process.env.NODE_ENV === "production";
+    const silent = options?.silent ?? false;
 
-    console.log("[ConfigValidator] Starting system configuration diagnostics...");
+    if (!silent) {
+      console.log("[ConfigValidator] Starting system configuration diagnostics...");
+    }
 
     // 1. Port & Basic Environment Verification
     const port = process.env.PORT || "3000";
@@ -87,14 +94,16 @@ export class ConfigValidator {
 
     const isValid = errors.length === 0;
 
-    console.log("[ConfigValidator] Diagnostics complete. Status:", {
-      valid: isValid,
-      errorCount: errors.length,
-      warningCount: warnings.length,
-    });
+    if (!silent) {
+      console.log("[ConfigValidator] Diagnostics complete. Status:", {
+        valid: isValid,
+        errorCount: errors.length,
+        warningCount: warnings.length,
+      });
 
-    if (warnings.length > 0) {
-      warnings.forEach((warn) => console.warn(`\x1b[33m[Config Warning]\x1b[0m ${warn}`));
+      if (warnings.length > 0) {
+        warnings.forEach((warn) => console.warn(`\x1b[33m[Config Warning]\x1b[0m ${warn}`));
+      }
     }
 
     if (!isValid) {
@@ -114,3 +123,4 @@ export class ConfigValidator {
     };
   }
 }
+

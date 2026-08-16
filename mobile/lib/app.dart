@@ -7,6 +7,9 @@ import 'core/localization/app_localizations.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/shop_discovery/presentation/bloc/shop_bloc.dart';
+import 'features/queue/presentation/bloc/queue_bloc.dart';
+import 'features/messaging/presentation/bloc/messaging_bloc.dart';
 
 class DorkCustomerApp extends StatelessWidget {
   const DorkCustomerApp({super.key});

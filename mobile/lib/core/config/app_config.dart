@@ -9,6 +9,7 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://localhost:3000',
   );
+  static const String apiBaseUrl = baseUrl;
 
   static const List<String> approvedDorkOrigins = [
     'localhost:3000',
@@ -18,5 +19,7 @@ class AppConfig {
     'dork.digital',
   ];
 
+  static const int connectionTimeoutMs = 15000;
+  static const int receiveTimeoutMs = 15000;
   static const Duration networkTimeout = Duration(seconds: 15);
 }
